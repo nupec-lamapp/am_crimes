@@ -1,0 +1,363 @@
+---
+title: "Boletim de Crimes Violentos na Mídia – "
+author: "NUPEC / LAMAPP – Coord. Hidelbrando Ferreira Rodrigues"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: readable
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(lubridate)
+library(forcats)
+library(scales)
+
+df <- read_csv("data/processed/crimes_classificados.csv", show_col_types = FALSE)
+
+df <- df %>%
+  mutate(
+    data_publicacao = as.Date(data_publicacao),
+    mes_ano = floor_date(data_publicacao, "month")
+  )
+```
+
+# 1. Resumo Executivo
+
+```{r resumo-executivo}
+n_total   <- nrow(df)
+periodo_i <- min(df$data_publicacao, na.rm = TRUE)
+periodo_f <- max(df$data_publicacao, na.rm = TRUE)
+
+cat("Período analisado:", format(periodo_i, "%d/%m/%Y"), "a", format(periodo_f, "%d/%m/%Y"), "\n\n")
+cat("Total de notícias de crimes analisadas:", n_total, "\n\n")
+
+tab_cat <- df %>%
+  count(categoria, sort = TRUE) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+
+cat("Principais categorias de crime (por frequência):\n\n")
+knitr::kable(tab_cat, align = "lrr")
+```
+
+# 2. Distribuição por Tipo de Crime
+
+```{r dist-tipo}
+tab_tipo <- df %>%
+  count(tipo_principal, sort = TRUE) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+
+knitr::kable(head(tab_tipo, 15), caption = "Top 15 tipos de crime", align = "lrr")
+```
+
+```{r grafico-tipo, fig.height=5}
+df %>%
+  count(tipo_principal, sort = TRUE) %>%
+  slice_max(n, n = 15) %>%
+  mutate(tipo_principal = fct_reorder(tipo_principal, n)) %>%
+  ggplot(aes(x = tipo_principal, y = n)) +
+  geom_col(fill = "#E63946") +
+  coord_flip() +
+  labs(
+    title = "Top 15 tipos de crime",
+    x = "Tipo de crime",
+    y = "Número de notícias"
+  ) +
+  theme_minimal()
+```
+
+# 3. Gravidade e Categorias
+
+```{r dist-gravidade}
+tab_grav <- df %>%
+  count(gravidade, sort = FALSE) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+
+knitr::kable(tab_grav, caption = "Distribuição por nível de gravidade", align = "lrr")
+```
+
+```{r grafico-gravidade, fig.height=4}
+df %>%
+  count(gravidade) %>%
+  ggplot(aes(x = gravidade, y = n, fill = gravidade)) +
+  geom_col() +
+  labs(
+    title = "Crimes por nível de gravidade",
+    x = "Gravidade",
+    y = "Número de notícias"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r heatmap-cat-grav, fig.height=5}
+df %>%
+  count(categoria, gravidade) %>%
+  ggplot(aes(x = gravidade, y = categoria, fill = n)) +
+  geom_tile() +
+  geom_text(aes(label = n), color = "white", size = 3) +
+  scale_fill_continuous(name = "Freq.") +
+  labs(
+    title = "Matriz Categoria x Gravidade",
+    x = "Gravidade",
+    y = "Categoria"
+  ) +
+  theme_minimal()
+```
+
+# 4. Perfil Aproximado das Vítimas (Geral)
+
+```{r genero}
+df %>%
+  count(genero_vitima, sort = TRUE) %>%
+  knitr::kable(caption = "Distribuição por gênero estimado da vítima (todas as notícias)", align = "lr")
+```
+
+```{r grafico-genero, fig.height=4}
+df %>%
+  count(genero_vitima) %>%
+  ggplot(aes(x = genero_vitima, y = n, fill = genero_vitima)) +
+  geom_col() +
+  labs(
+    title = "Crimes por gênero estimado da vítima (todas as notícias)",
+    x = "Gênero (estimado pelo título)",
+    y = "Número de notícias"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r faixa-etaria, fig.height=5}
+df %>%
+  filter(!is.na(faixa_etaria)) %>%
+  count(faixa_etaria, genero_vitima) %>%
+  ggplot(aes(x = faixa_etaria, y = n, fill = genero_vitima)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Faixa etária x gênero da vítima (todas as notícias)",
+    x = "Faixa etária",
+    y = "Número de notícias",
+    fill = "Gênero"
+  ) +
+  theme_minimal()
+```
+
+# 5. Dinâmica Temporal (Geral)
+
+```{r serie-temporal, fig.height=5}
+df %>%
+  filter(!is.na(data_publicacao)) %>%
+  count(data_publicacao) %>%
+  ggplot(aes(x = data_publicacao, y = n)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Série temporal de notícias de crimes (todas as notícias)",
+    x = "Data de publicação",
+    y = "Número de notícias"
+  ) +
+  theme_minimal()
+```
+
+```{r serie-letal-geral, fig.height=5}
+df %>%
+  filter(!is.na(data_publicacao),
+         categoria == "Crime Letal Violento") %>%
+  count(data_publicacao) %>%
+  ggplot(aes(x = data_publicacao, y = n)) +
+  geom_line(color = "#E63946") +
+  geom_point(color = "#E63946") +
+  labs(
+    title = "Série temporal – Crimes Letais Violentos (todas as notícias)",
+    x = "Data de publicação",
+    y = "Número de notícias"
+  ) +
+  theme_minimal()
+```
+
+# 6. Tabela Resumida de Casos Recentes
+
+```{r tabela-recentes}
+df %>%
+  arrange(desc(data_publicacao)) %>%
+  select(data_publicacao, portal, titulo, tipo_principal, gravidade) %>%
+  head(30) %>%
+  rename(
+    Data      = data_publicacao,
+    Portal    = portal,
+    Notícia   = titulo,
+    `Tipo de Crime` = tipo_principal,
+    Gravidade = gravidade
+  ) %>%
+  knitr::kable(caption = "Amostra de notícias recentes", align = "lllr")
+```
+
+# 7. Notas Metodológicas
+
+Este boletim é produzido automaticamente a partir de:
+
+- Coleta de notícias em portais de mídia do Amazonas;
+- Classificação heurística de tipo de crime, categoria e gravidade;
+- Extração aproximada de gênero e faixa etária da vítima a partir dos títulos.
+
+Os resultados devem ser interpretados como **indicadores de cobertura da mídia**, não como estatística oficial de criminalidade.
+
+# 8. Foco em Crimes Violentos
+
+Nesta seção, analisamos apenas as notícias classificadas como **crimes violentos**, com ênfase em crimes letais, violência sexual e violência doméstica.
+
+```{r viol-setup}
+viol <- df %>% 
+  filter(crime_violento == TRUE) %>%
+  mutate(
+    eh_letal = categoria == "Crime Letal Violento"
+  )
+
+n_viol <- nrow(viol)
+cat("Total de notícias classificadas como crimes violentos:", n_viol, "\n\n")
+```
+
+## 8.1 Resumo e Índice de Letalidade
+
+```{r viol-resumo}
+resumo_cat_viol <- viol %>%
+  count(categoria, sort = TRUE) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+
+resumo_letal <- viol %>%
+  summarise(
+    n_violentos = n(),
+    n_letais = sum(eh_letal, na.rm = TRUE),
+    indice_letal = n_letais / n_violentos
+  )
+
+cat("Índice de letalidade (proporção de crimes letais entre violentos):\n\n")
+print(resumo_letal)
+
+cat("\nDistribuição de crimes violentos por categoria:\n\n")
+knitr::kable(resumo_cat_viol, align = "lrr",
+             col.names = c("Categoria", "n", "%"))
+```
+
+```{r viol-cat-plot, fig.height=5}
+viol %>%
+  count(categoria, sort = TRUE) %>%
+  mutate(categoria = fct_reorder(categoria, n)) %>%
+  ggplot(aes(x = categoria, y = n, fill = categoria)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Crimes violentos por categoria",
+    x = "Categoria",
+    y = "Número de notícias"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## 8.2 Perfil das Vítimas em Crimes Violentos
+
+```{r viol-genero, fig.height=4}
+viol %>%
+  count(genero_vitima) %>%
+  ggplot(aes(x = genero_vitima, y = n, fill = genero_vitima)) +
+  geom_col() +
+  labs(
+    title = "Crimes violentos por gênero estimado da vítima",
+    x = "Gênero (estimado pelo título)",
+    y = "Número de notícias"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r viol-faixa, fig.height=5}
+viol %>%
+  filter(!is.na(faixa_etaria)) %>%
+  count(faixa_etaria, genero_vitima) %>%
+  ggplot(aes(x = faixa_etaria, y = n, fill = genero_vitima)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Faixa etária x gênero da vítima (apenas crimes violentos)",
+    x = "Faixa etária",
+    y = "Número de notícias",
+    fill = "Gênero"
+  ) +
+  theme_minimal()
+```
+
+```{r viol-genero-tipo}
+viol %>%
+  count(genero_vitima, tipo_principal) %>%
+  group_by(genero_vitima) %>%
+  mutate(pct = round(100 * n / sum(n), 1)) %>%
+  ungroup() %>%
+  arrange(desc(n)) %>%
+  head(20) %>%
+  knitr::kable(
+    caption = "Top 20 combinações gênero x tipo de crime (apenas violentos)",
+    align = "llrr"
+  )
+```
+
+## 8.3 Dinâmica Temporal de Crimes Violentos
+
+```{r viol-serie, fig.height=4}
+serie_viol <- viol %>%
+  filter(!is.na(data_publicacao)) %>%
+  count(data_publicacao)
+
+ggplot(serie_viol, aes(x = data_publicacao, y = n)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Série temporal – notícias de crimes violentos",
+    x = "Data de publicação",
+    y = "Número de notícias violentas"
+  ) +
+  theme_minimal()
+```
+
+```{r viol-serie-letal, fig.height=4}
+serie_letal <- viol %>%
+  filter(!is.na(data_publicacao), eh_letal) %>%
+  count(data_publicacao)
+
+ggplot(serie_letal, aes(x = data_publicacao, y = n)) +
+  geom_line(color = "#E63946") +
+  geom_point(color = "#E63946") +
+  labs(
+    title = "Série temporal – crimes letais violentos (subset de crimes violentos)",
+    x = "Data de publicação",
+    y = "Número de notícias letais"
+  ) +
+  theme_minimal()
+```
+
+```{r viol-indice-letal-mensal, fig.height=4}
+indice_letal_mensal <- viol %>%
+  group_by(mes_ano) %>%
+  summarise(
+    n_violentos = n(),
+    n_letais = sum(eh_letal, na.rm = TRUE),
+    indice_letal = n_letais / n_violentos,
+    .groups = "drop"
+  )
+
+ggplot(indice_letal_mensal, aes(x = mes_ano, y = indice_letal)) +
+  geom_line(color = "#1D3557") +
+  geom_point(color = "#1D3557") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title = "Índice de letalidade (proporção de crimes letais entre violentos)",
+    x = "Mês/ano",
+    y = "Índice de letalidade"
+  ) +
+  theme_minimal()
+```

@@ -1,0 +1,19 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.httr-oauth
+.quarto
+
+# Sistema Operacional
+.DS_Store
+desktop.ini
+Thumbs.db
+
+# Dados e Logs
+data/raw/
+
+# Renv
+
+# Temporários
