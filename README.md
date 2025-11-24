@@ -1,5 +1,8 @@
 # crimes_am
 
+O Monitor de Crimes Violentos - Amazonas e uma ferramenta experimental de monitoramento automatizado de noticias sobre crimes violentos no estado do Amazonas. O sistema integra tecnologias de web scraping, processamento de linguagem natural (NLP) e visualizacao interativa de dados para coletar, classificar e analisar noticias policiais publicadas em portais de noticias locais.
+
+
 Monitoramento automatizado de notícias sobre crimes violentos no Amazonas, com coleta (web scraping), classificação/enriquecimento e visualização em Shiny.
 
 **Nota:** a versão atual (0.0.1) extrai notícias exclusivamente do portal **A Crítica** (acritica.com).
@@ -116,3 +119,5 @@ Para mais detalhes e troubleshooting, consulte `DEPLOY.md` e `DIAGNOSTICO_DEPLOY
 - Integrar `renv` com um `renv.lock` versionado.
 - Automatizar execuções (cron, GitHub Actions etc.) chamando `run_pipeline.R`.
 - Integrar o app Shiny com as colunas `tipo_ml` / `prob_tipo_ml` para comparação visual entre heurística e modelo NLP.
+
+
