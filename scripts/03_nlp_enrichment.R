@@ -47,6 +47,7 @@ treinar_modelo_tipo <- function(df) {
   set.seed(123)
   split <- initial_split(df_treino, strata = tipo_principal)
   train_data <- training(split)
+  test_data  <- testing(split)
 
   recipe_tipo <- recipe(tipo_principal ~ titulo, data = train_data) %>%
     step_tokenize(titulo) %>%
@@ -66,17 +67,54 @@ treinar_modelo_tipo <- function(df) {
   set.seed(123)
   folds <- vfold_cv(train_data, v = 5, strata = tipo_principal)
 
+  metricas_nlp <- metric_set(accuracy, f_meas, bal_accuracy)
+
   resultados <- tune_grid(
     wf,
     resamples = folds,
     grid = grid,
-    metrics = metric_set(accuracy)
+    metrics = metricas_nlp
   )
 
   melhores <- select_best(resultados, "accuracy")
 
   modelo_final <- finalize_workflow(wf, melhores) %>%
     fit(train_data)
+
+  if (nrow(test_data) > 0) {
+    preds_test <- predict(modelo_final, new_data = test_data, type = "class")
+
+    df_eval <- test_data %>%
+      dplyr::select(tipo_principal) %>%
+      dplyr::mutate(
+        truth    = tipo_principal,
+        estimate = preds_test$.pred_class
+      )
+
+    met_test <- metric_set(accuracy, f_meas, bal_accuracy)(
+      df_eval,
+      truth = truth,
+      estimate = estimate
+    )
+
+    readr::write_csv(
+      met_test,
+      file.path(DIR_MODELS, "modelo_tipo_principal_metricas_teste.csv")
+    )
+  }
+
+  info_modelo <- tibble::tibble(
+    data_treinamento = Sys.time(),
+    n_obs_treino     = nrow(train_data),
+    n_obs_teste      = nrow(test_data),
+    n_classes        = dplyr::n_distinct(train_data$tipo_principal),
+    melhor_penalty   = melhores$penalty
+  )
+
+  readr::write_csv(
+    info_modelo,
+    file.path(DIR_MODELS, "modelo_tipo_principal_info.csv")
+  )
 
   metrica_final <- collect_metrics(resultados) %>%
     dplyr::filter(.metric == "accuracy") %>%
@@ -155,8 +193,3 @@ enriquecer_com_nlp <- function(
 
   invisible(df_saida)
 }
-
-if (!interactive()) {
-  enriquecer_com_nlp()
-}
-

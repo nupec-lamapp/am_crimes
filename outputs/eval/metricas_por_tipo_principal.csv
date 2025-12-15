@@ -1,0 +1,17 @@
+tipo_principal,suporte,TP,FP,FN,TN,precision,recall,f1
+Não classificado com precisão,1128,1128,0,0,848,1,1,1
+Homicídio,357,357,0,0,1619,1,1,1
+Roubo/Assalto,117,117,0,0,1859,1,1,1
+Tráfico de Drogas/Facções,116,116,0,0,1860,1,1,1
+Estupro,89,89,0,0,1887,1,1,1
+Estupro de Vulnerável,47,47,0,0,1929,1,1,1
+Agressão Doméstica,29,29,0,0,1947,1,1,1
+Sequestro/Cárcere Privado,26,26,0,0,1950,1,1,1
+Esfaqueamento,20,20,0,0,1956,1,1,1
+Acerto de Contas,13,13,0,0,1963,1,1,1
+Abuso Sexual,12,12,0,0,1964,1,1,1
+Latrocínio,11,11,0,0,1965,1,1,1
+Agressão com Objeto,4,4,0,0,1972,1,1,1
+Roubo à Mão Armada,3,3,0,0,1973,1,1,1
+Espancamento,3,3,0,0,1973,1,1,1
+Feminicídio,1,1,0,0,1975,1,1,1

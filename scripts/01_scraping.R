@@ -1,7 +1,7 @@
 ############################################################
 # 01_scraping.R
-# Coleta de notícias policiais/violentas - NUPEC / LAMAPP
-# Estrutura preparada para múltiplos portais
+# Coleta de not¡cias policiais/violentas - NUPEC / LAMAPP
+# Estrutura preparada para m£ltiplos portais
 ############################################################
 
 suppressPackageStartupMessages({
@@ -34,6 +34,60 @@ log_event <- function(level = "INFO", ...) {
   linha <- sprintf("[%s][%s] %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), level, msg)
   message(linha)
   cat(linha, file = LOG_TEXTO, append = TRUE, sep = "\n")
+}
+
+log_http <- function(url, status, etapa = "LISTAGEM") {
+  log_event(
+    "INFO",
+    "[HTTP]",
+    sprintf("etapa=%s status=%s url=%s", etapa, status, url)
+  )
+}
+
+fazer_get_seguro_v2 <- function(
+  url,
+  max_retries  = 3,
+  backoff_base = 2,
+  timeout_seg  = 30,
+  ua           = UA_NUPEC
+) {
+  tentativa <- 1
+  repeat {
+    Sys.sleep(runif(1, 0.8, 2.5))
+
+    resp <- tryCatch(
+      httr::GET(url, httr::user_agent(ua), httr::timeout(timeout_seg)),
+      error = function(e) {
+        log_event("ERROR", "[GET_V2]", url, "->", e$message)
+        NULL
+      }
+    )
+
+    if (is.null(resp)) {
+      if (tentativa >= max_retries) return(NULL)
+    } else {
+      status <- httr::status_code(resp)
+      if (!httr::http_error(resp)) {
+        return(resp)
+      }
+
+      if (status %in% c(429, 500:599) && tentativa < max_retries) {
+        wait <- backoff_base ^ tentativa + runif(1, 0, 1)
+        log_event(
+          "WARN",
+          "[GET_V2]",
+          "status", status,
+          "retry em", round(wait, 1), "s para", url
+        )
+        Sys.sleep(wait)
+      } else {
+        log_event("ERROR", "[GET_V2]", "status", status, "abortando para", url)
+        return(NULL)
+      }
+    }
+
+    tentativa <- tentativa + 1
+  }
 }
 
 fazer_get_seguro <- function(url) {
@@ -132,7 +186,7 @@ eh_crime_violento <- function(titulo) {
 }
 
 ############################################################
-# Coletor A Crítica
+# Coletor A Cr¡tica
 ############################################################
 
 coletar_acritica <- function(data_inicio, data_fim, config = list()) {
@@ -148,7 +202,7 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
 
   while (continuar_buscando && pagina_atual <= max_paginas) {
     url_listagem <- paste0(base_url, "?page=", pagina_atual)
-    log_event("DEBUG", sprintf(">> Processando página %d...", pagina_atual))
+    log_event("DEBUG", sprintf(">> Processando p gina %d...", pagina_atual))
 
     resp <- fazer_get_seguro(url_listagem)
     if (is.null(resp)) {
@@ -161,7 +215,7 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
 
     links_nodes <- rvest::html_elements(doc, "h3 a")
     if (length(links_nodes) == 0) {
-      log_event("INFO", sprintf("Nenhum link encontrado na página %d. Fim da paginação.", pagina_atual))
+      log_event("INFO", sprintf("Nenhum link encontrado na p gina %d. Fim da pagina‡Æo.", pagina_atual))
       break
     }
 
@@ -221,7 +275,7 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
     }
 
     if (n_processados_pagina > 0 && n_antigos_na_pagina == n_processados_pagina) {
-      log_event("INFO", sprintf("Todos os itens da página %d são anteriores a %s. Parando.", pagina_atual, data_inicio))
+      log_event("INFO", sprintf("Todos os itens da p gina %d sÆo anteriores a %s. Parando.", pagina_atual, data_inicio))
       continuar_buscando <- FALSE
     }
 
@@ -229,7 +283,7 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
   }
 
   if (length(noticias_acumuladas) == 0) {
-    log_event("WARN", "[ACRITICA] Nenhuma notícia encontrada no intervalo.")
+    log_event("WARN", "[ACRITICA] Nenhuma not¡cia encontrada no intervalo.")
     return(tibble())
   }
 
@@ -240,7 +294,125 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
 registrar_coletor("acritica", coletar_acritica)
 
 ############################################################
-# Função principal
+# Coletor Em Tempo
+############################################################
+
+coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
+  base_url    <- "https://emtempo.com.br/category/policia/"
+  max_paginas <- config$max_paginas %||% 60
+
+  noticias <- list()
+  pagina_atual <- 1
+  dominio <- get_domain(base_url)
+
+  log_event("INFO", sprintf("--- Iniciando busca em '%s' ---", base_url))
+
+  while (pagina_atual <= max_paginas) {
+    url_listagem <- if (pagina_atual == 1) {
+      base_url
+    } else {
+      sprintf("%spage/%d/", base_url, pagina_atual)
+    }
+    log_event("DEBUG", sprintf(">> Processando pagina %d...", pagina_atual))
+
+    resp <- fazer_get_seguro_v2(url_listagem)
+    if (is.null(resp)) {
+      log_event("ERROR", "[EMTEMPO] Falha ao acessar listagem. Parando.")
+      break
+    }
+
+    pagina_html <- tryCatch(
+      httr::content(resp, as = "text", encoding = "UTF-8"),
+      error = function(e) ""
+    )
+    doc <- tryCatch(xml2::read_html(pagina_html), error = function(e) NULL)
+    if (is.null(doc)) {
+      log_event("ERROR", "[EMTEMPO] Falha ao ler HTML da listagem.")
+      break
+    }
+
+    links_nodes <- rvest::html_elements(doc, "h2 a[href*='/policia/'], h5 a[href*='/policia/']")
+    if (length(links_nodes) == 0) {
+      log_event("INFO", sprintf("Nenhum link encontrado na pagina %d. Fim da paginacao.", pagina_atual))
+      break
+    }
+
+    df_links <- tibble(
+      titulo = rvest::html_text(links_nodes, trim = TRUE),
+      href   = rvest::html_attr(links_nodes, "href")
+    ) %>%
+      filter(!is.na(href), href != "") %>%
+      distinct(href, .keep_all = TRUE)
+
+    log_event("INFO", sprintf("Encontrados %d links na listagem.", nrow(df_links)))
+
+    n_antigos <- 0
+    n_processados <- 0
+
+    for (i in seq_len(nrow(df_links))) {
+      link <- df_links$href[i]
+      tit  <- df_links$titulo[i]
+
+      if (nchar(tit) < 10) next
+
+      if (!grepl("^https?://", link)) {
+        if (startsWith(link, "/")) {
+          link <- paste0(dominio, link)
+        } else {
+          next
+        }
+      }
+
+      resp_art <- fazer_get_seguro_v2(link)
+      if (is.null(resp_art)) next
+
+      pag_art <- tryCatch(httr::content(resp_art, as = "text", encoding = "UTF-8"), error = function(e) "")
+      if (pag_art == "") next
+
+      doc_art  <- xml2::read_html(pag_art)
+      data_pub <- extrair_data_publicacao(doc_art)
+
+      n_processados <- n_processados + 1
+
+      if (is.na(data_pub)) next
+      if (data_pub > data_fim) next
+
+      if (data_pub < data_inicio) {
+        n_antigos <- n_antigos + 1
+        next
+      }
+
+      noticias[[length(noticias) + 1]] <- tibble(
+        portal          = "emtempo",
+        data_publicacao = format(data_pub, "%Y-%m-%d"),
+        titulo          = normalizar(tit),
+        url             = link
+      )
+
+      log_event("DEBUG", sprintf("[GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+    }
+
+    if (n_processados > 0 && n_antigos == n_processados) {
+      log_event("INFO", sprintf("Itens da pagina %d sao anteriores a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    pagina_atual <- pagina_atual + 1
+  }
+
+  if (length(noticias) == 0) {
+    log_event("WARN", "[EMTEMPO] Nenhuma noticia encontrada no intervalo.")
+    return(tibble())
+  }
+
+  bind_rows(noticias) %>%
+    mutate(crime_violento = eh_crime_violento(titulo))
+}
+
+registrar_coletor("emtempo", coletar_emtempo)
+
+############################################################
+# Fun‡Æo principal
 ############################################################
 
 rodar_scraping <- function(data_inicio = Sys.Date(),
@@ -255,7 +427,7 @@ rodar_scraping <- function(data_inicio = Sys.Date(),
   resultados <- purrr::map(portais, function(portal) {
     coletor <- obter_coletor(portal)
     if (is.null(coletor)) {
-      log_event("WARN", sprintf("Coletor '%s' não encontrado, ignorando.", portal))
+      log_event("WARN", sprintf("Coletor '%s' nÆo encontrado, ignorando.", portal))
       return(tibble())
     }
 

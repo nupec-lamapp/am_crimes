@@ -1,0 +1,30 @@
+genero_vitima,tipo_principal,n,total_genero,pct
+feminino,Esfaqueamento,2,53,3.8
+feminino,Estupro,11,53,20.8
+feminino,Estupro de Vulnerável,7,53,13.2
+feminino,Homicídio,25,53,47.2
+feminino,Não classificado com precisão,2,53,3.8
+feminino,Roubo/Assalto,5,53,9.4
+feminino,Tráfico de Drogas/Facções,1,53,1.9
+indefinido,Abuso Sexual,9,275,3.3
+indefinido,Acerto de Contas,1,275,0.4
+indefinido,Esfaqueamento,1,275,0.4
+indefinido,Espancamento,1,275,0.4
+indefinido,Estupro,32,275,11.6
+indefinido,Estupro de Vulnerável,12,275,4.4
+indefinido,Homicídio,119,275,43.3
+indefinido,Latrocínio,1,275,0.4
+indefinido,Não classificado com precisão,10,275,3.6
+indefinido,Roubo à Mão Armada,2,275,0.7
+indefinido,Roubo/Assalto,74,275,26.9
+indefinido,Sequestro/Cárcere Privado,12,275,4.4
+indefinido,Tráfico de Drogas/Facções,1,275,0.4
+masculino,Abuso Sexual,2,214,0.9
+masculino,Esfaqueamento,2,214,0.9
+masculino,Estupro,46,214,21.5
+masculino,Estupro de Vulnerável,28,214,13.1
+masculino,Homicídio,81,214,37.9
+masculino,Não classificado com precisão,14,214,6.5
+masculino,Roubo à Mão Armada,1,214,0.5
+masculino,Roubo/Assalto,37,214,17.3
+masculino,Sequestro/Cárcere Privado,3,214,1.4

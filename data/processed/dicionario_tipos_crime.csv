@@ -1,0 +1,19 @@
+categoria,tipo_principal,gravidade,descricao
+Crime Letal Violento,Homicídio,extrema,Morte intencional consumada
+Crime Letal Violento,Tentativa de Homicídio,muito alta,Tentativa de provocar morte
+Crime Letal Violento,Feminicídio,extrema,Morte de mulher por parceiro íntimo
+Crime Letal Violento,Chacina,extrema,Múltiplas mortes em mesmo evento
+Violência Sexual,Estupro,extrema,Penetração sexual sem consentimento
+Violência Sexual,Tentativa de Estupro,muito alta,Tentativa de penetração sexual sem consentimento
+Violência Sexual,Abuso Sexual,muito alta,Contato sexual sem consentimento
+Violência Doméstica,Agressão Doméstica,alta,Agressão física entre parceiros
+Violência Doméstica,Feminicídio Doméstico,extrema,Morte de mulher no contexto doméstico
+Roubo Violento,Latrocínio,extrema,Morte durante roubo
+Roubo Violento,Roubo à Mão Armada,muito alta,Roubo usando arma de fogo
+Roubo Violento,Roubo/Assalto,alta,Roubo com confronto
+Lesão Corporal Grave,Esfaqueamento,alta,Lesão grave com faca/instrumento cortante
+Lesão Corporal Grave,Espancamento,alta,Lesão grave com agressão física
+Lesão Corporal Grave,Agressão com Objeto,alta,Lesão grave com objeto contundente
+Privação de Liberdade,Sequestro/Cárcere Privado,muito alta,Privação forçada de liberdade
+Crime Organizado,Tráfico de Drogas/Facções,alta,Distribuição/venda de drogas em contexto violento
+Violência Lethal Contextual,Acerto de Contas,extrema,Execução por disputa ou vingança

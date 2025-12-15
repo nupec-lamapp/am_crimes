@@ -1,6 +1,12 @@
 ############################################################
-# 03_analise_exploratoria.R
-# Análises exploratórias e gráficos padrão
+# 05_analise_exploratoria.R  [EXTRA / OPCIONAL]
+# Análises exploratórias e gráficos padrão.
+#
+# Atenção:
+# - Este script NÃO faz parte do pipeline oficial (run_pipeline.R).
+# - NÃO é utilizado diretamente pelo app Shiny.
+# - Mantido apenas como material de apoio para análises manuais.
+#
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
 

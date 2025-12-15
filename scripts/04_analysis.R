@@ -1,5 +1,6 @@
 ############################################################
-# 04_analise_crimes_violentos.R
+# 04_analysis.R
+# Geração de indicadores e saídas analíticas
 # Análises focadas em crimes violentos na mídia (AM)
 #
 # Pré-requisito:
@@ -52,7 +53,6 @@ if (nrow(viol) == 0) {
 
 cat("Total de notícias violentas:", nrow(viol), "\n")
 
-# Definir "crime letal violento" de forma prática
 viol <- viol %>%
   mutate(
     eh_letal = categoria == "Crime Letal Violento"
@@ -114,7 +114,6 @@ resumo_portal_cat <- viol %>%
 write_csv(resumo_portal_cat, "outputs/04_resumo_portal_categoria.csv")
 cat("Resumo portal x categoria salvo em outputs/04_resumo_portal_categoria.csv\n")
 
-# Gráfico: distribuição de categorias por portal (top portais)
 top_portais <- viol %>%
   count(portal, sort = TRUE) %>%
   slice_max(n, n = 6) %>%
@@ -124,6 +123,10 @@ p_portal_cat <- resumo_portal_cat %>%
   filter(portal %in% top_portais) %>%
   ggplot(aes(x = categoria, y = pct, fill = categoria)) +
   geom_col() +
+  geom_text(aes(label = paste0(pct, "%")),
+            position = position_stack(vjust = 0.5),
+            size = 3,
+            color = "white") +
   coord_flip() +
   facet_wrap(~ portal, scales = "free_y") +
   labs(
@@ -141,7 +144,6 @@ ggsave("outputs/04_portal_categoria.png",
 # 6. Perfil aproximado das vítimas
 ############################################################
 
-# 6.1 Gênero x tipo de crime
 resumo_genero_tipo <- viol %>%
   count(genero_vitima, tipo_principal) %>%
   group_by(genero_vitima) %>%
@@ -156,11 +158,12 @@ write_csv(resumo_genero_tipo, "outputs/04_resumo_genero_tipo.csv")
 p_genero_tipo <- resumo_genero_tipo %>%
   filter(!is.na(genero_vitima),
          genero_vitima %in% c("feminino", "masculino")) %>%
-  mutate(
-    tipo_principal = fct_reorder(tipo_principal, n)
-  ) %>%
   ggplot(aes(x = tipo_principal, y = n, fill = genero_vitima)) +
   geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(pct, "%")),
+            position = position_dodge(width = 0.9),
+            hjust = -0.1,
+            size = 3) +
   coord_flip() +
   labs(
     title = "Tipo de crime x gênero estimado da vítima",
@@ -173,7 +176,6 @@ p_genero_tipo <- resumo_genero_tipo %>%
 ggsave("outputs/04_genero_tipo.png",
        p_genero_tipo, width = 10, height = 6, dpi = 300)
 
-# 6.2 Faixa etária x gênero
 resumo_faixa_genero <- viol %>%
   filter(!is.na(faixa_etaria)) %>%
   count(faixa_etaria, genero_vitima) %>%
@@ -189,6 +191,10 @@ write_csv(resumo_faixa_genero, "outputs/04_resumo_faixa_genero.csv")
 p_faixa_genero <- resumo_faixa_genero %>%
   ggplot(aes(x = faixa_etaria, y = n, fill = genero_vitima)) +
   geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(pct, "%")),
+            position = position_dodge(width = 0.9),
+            vjust = -0.3,
+            size = 3) +
   labs(
     title = "Faixa etária x gênero estimado da vítima",
     x = "Faixa etária",
@@ -204,7 +210,6 @@ ggsave("outputs/04_faixa_genero.png",
 # 7. Dinâmica temporal focada nos violentos
 ############################################################
 
-# Série geral de crimes violentos
 serie_viol <- viol %>%
   filter(!is.na(data_publicacao)) %>%
   count(data_publicacao)
@@ -214,7 +219,7 @@ p_serie_viol <- serie_viol %>%
   geom_line() +
   geom_point() +
   labs(
-    title = "Série temporal – notícias de crimes violentos",
+    title = "Série temporal - notícias de crimes violentos",
     x = "Data de publicação",
     y = "Número de notícias violentas"
   ) +
@@ -223,7 +228,6 @@ p_serie_viol <- serie_viol %>%
 ggsave("outputs/04_serie_violentos.png",
        p_serie_viol, width = 9, height = 4, dpi = 300)
 
-# Série de crimes letais violentos
 serie_letal <- viol %>%
   filter(!is.na(data_publicacao), eh_letal) %>%
   count(data_publicacao)
@@ -233,7 +237,7 @@ p_serie_letal <- serie_letal %>%
   geom_line(color = "#E63946") +
   geom_point(color = "#E63946") +
   labs(
-    title = "Série temporal – crimes letais violentos",
+    title = "Série temporal - crimes letais violentos",
     x = "Data de publicação",
     y = "Número de notícias letais"
   ) +
@@ -242,7 +246,6 @@ p_serie_letal <- serie_letal %>%
 ggsave("outputs/04_serie_letais.png",
        p_serie_letal, width = 9, height = 4, dpi = 300)
 
-# Índice de letalidade ao longo do tempo (mensal)
 indice_letal_mensal <- viol %>%
   group_by(mes_ano) %>%
   summarise(

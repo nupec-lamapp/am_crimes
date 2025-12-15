@@ -1,73 +1,63 @@
 ############################################################
-# 02_processamento.R
-# Consolidação, classificação e enriquecimento dos dados
+# 03_cleaning.R
+# Limpeza, classificação e enriquecimento dos dados
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
 
 suppressPackageStartupMessages({
   library(dplyr)
   library(readr)
-  library(stringr)
-  library(stringi)
-  library(lubridate)
-  library(purrr)
   library(tibble)
 })
 
 options(stringsAsFactors = FALSE)
 
-DIR_RAW       <- file.path("data", "raw")
 DIR_PROCESSED <- file.path("data", "processed")
-
 if (!dir.exists(DIR_PROCESSED)) dir.create(DIR_PROCESSED, recursive = TRUE, showWarnings = FALSE)
 
-# Utilitários compartilhados
+# Utilitários compartilhados de classificação/enriquecimento
 source("R/classification_utils.R")
 
 ############################################################
-# Processar dados raw -> base consolidada
+# clean_and_enrich_data()
+# Recebe df já parseado e retorna df final limpo + grava
+# artefatos em data/processed/.
 ############################################################
 
-processar_dados_raw <- function() {
-  
-  arquivos_raw <- list.files(DIR_RAW, pattern = "\\.csv$", full.names = TRUE)
-  if (length(arquivos_raw) == 0) {
-    stop("Nenhum arquivo encontrado em data/raw. Rode primeiro o 01_scraping.R.")
+clean_and_enrich_data <- function(df_parsed,
+                                  dir_processed = DIR_PROCESSED) {
+
+  if (is.null(df_parsed) || !is.data.frame(df_parsed) || nrow(df_parsed) == 0) {
+    stop("Objeto df_parsed vazio ou inválido em clean_and_enrich_data().")
   }
-  
-  message("Lendo arquivos de data/raw/ ...")
-  
-  lista_dfs <- lapply(arquivos_raw, function(arq) {
-    message(" - ", arq)
-    readr::read_csv(arq, show_col_types = FALSE)
-  })
-  
-  df_raw <- bind_rows(lista_dfs) %>%
-    distinct(portal, data_publicacao, titulo, url, .keep_all = TRUE) %>%
-    mutate(
-      data_publicacao = as.Date(data_publicacao)
-    )
-  
-  message("Total de registros brutos após junção/deduplicação: ", nrow(df_raw))
-  
-  # aplicar classificação completa
-  df_class <- aplicar_classificacao_completa(df_raw)
-  
-  # enriquecer com variáveis auxiliares
+
+  cols_essenciais <- c("portal", "data_publicacao", "titulo", "url")
+  faltando <- setdiff(cols_essenciais, names(df_parsed))
+  if (length(faltando) > 0) {
+    stop("Colunas essenciais ausentes em df_parsed: ", paste(faltando, collapse = ", "))
+  }
+
+  df_class <- aplicar_classificacao_completa(df_parsed)
+
   df_final <- df_class %>%
     mutate(
       crime_violento = eh_crime_violento_v2(titulo),
-      genero_vitima       = sapply(titulo, extrair_genero),
-      idade_vitima        = sapply(titulo, extrair_idade),
-      faixa_etaria        = sapply(idade_vitima, classificar_faixa_etaria)
+      genero_vitima  = vapply(titulo, extrair_genero, character(1)),
+      idade_vitima   = vapply(titulo, extrair_idade, integer(1)),
+      faixa_etaria   = vapply(idade_vitima, classificar_faixa_etaria, character(1))
     )
-  
-  # salvar base consolidada
-  arq_out <- file.path(DIR_PROCESSED, "crimes_classificados.csv")
+
+  arq_out <- file.path(dir_processed, "crimes_classificados.csv")
   readr::write_csv(df_final, arq_out)
   message("Base consolidada salva em: ", arq_out)
-  
-  # dicionário de crimes
+
+  dic_observado <- df_final %>%
+    count(categoria, tipo_principal, gravidade, sort = TRUE)
+
+  arq_dic_obs <- file.path(dir_processed, "dicionario_tipos_observado.csv")
+  readr::write_csv(dic_observado, arq_dic_obs)
+  message("Dicionário observado de tipos salvo em: ", arq_dic_obs)
+
   dicionario_crimes <- tibble(
     categoria = c(
       "Crime Letal Violento",
@@ -150,31 +140,23 @@ processar_dados_raw <- function() {
       "Execução por disputa ou vingança"
     )
   )
-  
-  arq_dic <- file.path(DIR_PROCESSED, "dicionario_tipos_crime.csv")
+
+  arq_dic <- file.path(dir_processed, "dicionario_tipos_crime.csv")
   readr::write_csv(dicionario_crimes, arq_dic)
   message("Dicionário de tipos de crime salvo em: ", arq_dic)
-  
-  # template de validação manual
+
   validacao_template <- df_final %>%
     select(titulo, tipo_principal, tipo_detalhado, gravidade) %>%
     mutate(
-      validado      = NA_character_,
+      validado       = NA_character_,
       tipo_corrigido = tipo_principal,
-      observacoes   = NA_character_
+      observacoes    = NA_character_
     )
-  
-  arq_val <- file.path(DIR_PROCESSED, "validacao_manual_tipos.csv")
+
+  arq_val <- file.path(dir_processed, "validacao_manual_tipos.csv")
   readr::write_csv(validacao_template, arq_val)
   message("Template de validação manual criado em: ", arq_val)
-  
+
   df_final
 }
 
-############################################################
-# Execução quando rodar via Rscript
-############################################################
-
-# if (!interactive()) {
-#   processar_dados_raw()
-# }
