@@ -1,7 +1,12 @@
 ############################################################
-# 04_avaliacao_classificador.R
+# 06_avaliacao_classificador.R  [EXTRA / OPCIONAL]
 # Avaliação da classificação de tipos de crime
-# com base na validação manual
+# com base na validação manual.
+#
+# Atenção:
+# - Este script NÃO faz parte do pipeline oficial (run_pipeline.R).
+# - NÃO é utilizado diretamente pelo app Shiny.
+# - Mantido apenas como material de apoio para auditoria detalhada.
 #
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
@@ -149,6 +154,29 @@ metrics_por_classe <- bind_rows(metrics_list) %>%
 readr::write_csv(
   metrics_por_classe,
   file.path(DIR_EVAL, "metricas_por_tipo_principal.csv")
+)
+
+valid_classes <- metrics_por_classe %>%
+  dplyr::filter(!is.na(f1))
+
+f1_macro <- mean(valid_classes$f1, na.rm = TRUE)
+
+f1_ponderado <- with(valid_classes, {
+  sum(f1 * suporte, na.rm = TRUE) / sum(suporte, na.rm = TRUE)
+})
+
+acuracia_bal <- mean(valid_classes$recall, na.rm = TRUE)
+
+metricas_globais <- tibble::tibble(
+  acuracia_geral = round(acuracia_geral, 3),
+  f1_macro       = round(f1_macro, 3),
+  f1_ponderado   = round(f1_ponderado, 3),
+  acuracia_bal   = round(acuracia_bal, 3)
+)
+
+readr::write_csv(
+  metricas_globais,
+  file.path(DIR_EVAL, "metricas_globais_tipo_principal.csv")
 )
 
 ############################################################

@@ -1,3 +1,9 @@
+############################################################
+# setup.R
+# Script de bootstrap do projeto (uso único / desenvolvimento)
+# NÃO faz parte da pipeline nem é usado pelo app.
+############################################################
+
 usethis::use_git()
 usethis::use_readme_md(open = FALSE)
 usethis::use_directory("R")

@@ -1,0 +1,60 @@
+# Arquivos e pastas a serem ignorados no deploy do shinyapps.io
+
+# Dados e processamento
+data/raw/
+data/processed/*.csv
+logs/
+outputs/*.csv
+outputs/*.png
+outputs/figs/
+outputs/eval/
+
+# Scripts de pipeline (não necessários no deploy)
+scripts_pipeline/
+run_pipeline.R
+int/
+
+# Testes
+tests/
+testthat.R
+
+# Renv (bibliotecas locais)
+renv/library/
+renv/staging/
+renv/activate.R
+
+# Arquivos de desenvolvimento
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.httr-oauth
+.quarto
+
+# Sistema operacional
+.DS_Store
+desktop.ini
+Thumbs.db
+
+# Documentação de desenvolvimento
+VERSIONAMENTO.md
+INSTRUCOES_GIT.md
+CHANGELOG.md
+DEPLOY.md
+SOLUCAO_RAPIDA.md
+DIAGNOSTICO_DEPLOY.md
+deploy_helper.R
+deploy.R
+resolver_limite_apps.R
+configurar_rsconnect.R
+versionar.bat
+versionar.sh
+
+# Outros
+*.tmp
+*.bak
+*~
+relat.R
+05_boletim_crimes.Rmd
+
+
