@@ -12,6 +12,7 @@ mod_controle_coleta_ui <- function(id) {
       wellPanel(
         h4("Coleta de portais"),
         actionButton(ns("btn_refresh_portais"), "Atualizar lista de portais", class = "btn btn-secondary btn-sm"),
+        textOutput(ns("portais_status")),
         selectInput(ns("portais"), "Portais:", choices = "Todos", multiple = TRUE),
         dateRangeInput(
           ns("range"),
@@ -60,18 +61,31 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    portais_status <- reactiveVal("")
+    output$portais_status <- renderText(portais_status())
+
     listar_portais_seguro <- function() {
-      tryCatch({
+      portais_status("")
+      out <- tryCatch({
         source("scripts/01_scraping.R", local = TRUE)
-        listar_coletores()
+        list(portais = listar_coletores(), err = NULL)
       }, error = function(e) {
-        character()
+        list(portais = character(), err = conditionMessage(e))
       })
+      if (!is.null(out$err) && nzchar(out$err)) {
+        portais_status(paste0("Falha ao carregar coletores: ", out$err))
+      }
+      out$portais
     }
 
     atualizar_portais <- function() {
       portais <- listar_portais_seguro()
-      if (length(portais) == 0) portais <- "Todos"
+      if (length(portais) == 0) {
+        portais <- "Todos"
+        if (!nzchar(isolate(portais_status()))) {
+          portais_status("Nenhum coletor disponível. Verifique dependências/pacotes do scraper.")
+        }
+      }
       updateSelectInput(
         session, "portais",
         choices = c("Todos", portais),
@@ -122,7 +136,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       df_p <- df %>%
         dplyr::mutate(data_pub = as.Date(data_pub)) %>%
-        dplyr::filter(portal == portal, !is.na(data_pub))
+        dplyr::filter(.data$portal == portal, !is.na(data_pub))
 
       seq_datas <- seq(from = d1, to = d2, by = "day")
       presentes <- unique(df_p$data_pub)
@@ -197,31 +211,56 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       log_txt("Iniciando execucao...")
 
+      ok <- TRUE
       withProgress(message = "Executando coleta", value = 0, {
         incProgress(0.1, detail = "Carregando scripts de scraping")
+        load_err <- NULL
         tryCatch({
           source("scripts/01_scraping.R", local = TRUE)
           source("scripts/02_parse.R", local = TRUE)
           source("scripts/03_cleaning.R", local = TRUE)
         }, error = function(e) {
-          showNotification(paste("Erro carregando scripts:", e$message), type = "error")
-          stop(e)
+          load_err <<- conditionMessage(e)
         })
+        if (!is.null(load_err)) {
+          ok <<- FALSE
+          log_txt(paste("Erro carregando scripts:", load_err))
+          showNotification(paste("Erro carregando scripts:", load_err), type = "error")
+          return(NULL)
+        }
+        if (exists("CRIMES_AM_WORKDIR", inherits = TRUE)) {
+          log_txt(paste("Workdir:", get("CRIMES_AM_WORKDIR", inherits = TRUE)))
+        }
 
         incProgress(0.4, detail = "Rodando scraping")
+        scrap_err <- NULL
+        n_raw <- NA_integer_
         tryCatch({
-          rodar_scraping(
+          df_raw <- rodar_scraping(
             data_inicio = d1,
             data_fim    = d2,
             portais     = if (is.null(portais_sel)) listar_coletores() else portais_sel
           )
+          n_raw <- if (is.data.frame(df_raw)) nrow(df_raw) else NA_integer_
         }, error = function(e) {
-          log_txt(paste("Erro no scraping:", e$message))
-          showNotification("Erro no scraping, veja o log.", type = "error")
-          stop(e)
+          scrap_err <<- conditionMessage(e)
         })
+        if (!is.null(scrap_err)) {
+          ok <<- FALSE
+          log_txt(paste("Erro no scraping:", scrap_err))
+          showNotification(paste("Erro no scraping:", scrap_err), type = "error")
+          return(NULL)
+        }
+        if (!is.na(n_raw)) log_txt(paste("Scraping OK. Registros brutos:", n_raw))
+        if (is.na(n_raw) || n_raw == 0) {
+          ok <<- FALSE
+          log_txt("Scraping nao retornou noticias novas. Parse/cleaning nao serao executados.")
+          showNotification("Scraping concluido sem novas noticias. Nada para processar.", type = "warning")
+          return()
+        }
 
         if (isTRUE(cancelar())) {
+          ok <<- FALSE
           log_txt("Execucao interrompida pelo usuario apos scraping. Dados coletados foram mantidos.")
           showNotification("Execucao interrompida apos scraping. Dados brutos mantidos.", type = "warning")
           return()
@@ -229,23 +268,30 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
         if (isTRUE(input$rodar_pipeline)) {
           incProgress(0.7, detail = "Parse + cleaning")
+          pipe_err <- NULL
           tryCatch({
             df_parsed <- parse_raw_files()
             clean_and_enrich_data(df_parsed)
           }, error = function(e) {
-            log_txt(paste("Erro no parse/cleaning:", e$message))
-            showNotification("Erro no parse/cleaning, veja o log.", type = "error")
-            stop(e)
+            pipe_err <<- conditionMessage(e)
           })
+          if (!is.null(pipe_err)) {
+            ok <<- FALSE
+            log_txt(paste("Erro no parse/cleaning:", pipe_err))
+            showNotification(paste("Erro no parse/cleaning:", pipe_err), type = "error")
+            return(NULL)
+          }
         }
 
         incProgress(1, detail = "Concluido")
       })
 
+      if (!isTRUE(ok)) return()
+
       dados_enr(carregar_principal())
       dados_est(carregar_estaticos())
       log_txt("Execucao finalizada com sucesso.")
-      showNotification("Coleta finalizada.", type = "success")
+      showNotification("Coleta finalizada.", type = "message")
     })
   })
 }

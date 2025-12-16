@@ -5,14 +5,17 @@ source_if_exists <- function(path) {
   sys.source(path, envir = .GlobalEnv)
 }
 
-log_dir <- "logs"
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+
+log_dir <- if (exists("DIR_LOGS")) DIR_LOGS else "logs"
 if (!dir.exists(log_dir)) dir.create(log_dir, showWarnings = FALSE)
 log_file <- file.path(log_dir, "pipeline.log")
 
 log_pipeline <- function(level, msg) {
   linha <- sprintf("[%s] [%s] %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), level, msg)
   message(linha)
-  cat(linha, file = log_file, append = TRUE, sep = "\n")
+  tryCatch(cat(linha, file = log_file, append = TRUE, sep = "\n"), error = function(e) invisible(NULL))
 }
 
 run_step <- function(nome, fun) {

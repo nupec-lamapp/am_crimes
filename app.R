@@ -2,7 +2,7 @@
 # APP SHINY - Monitor de Crimes Violentos (Amazonas)
 # Versão 0.0.2 - Arquitetura modular
 ############################################################
-
+  
 source("global.R")
 source("R/mod_dashboard.R")
 source("R/mod_relatorios.R")

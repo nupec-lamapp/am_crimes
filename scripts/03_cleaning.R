@@ -12,7 +12,9 @@ suppressPackageStartupMessages({
 
 options(stringsAsFactors = FALSE)
 
-DIR_PROCESSED <- file.path("data", "processed")
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+if (!exists("DIR_PROCESSED", inherits = TRUE)) DIR_PROCESSED <- file.path("data", "processed")
 if (!dir.exists(DIR_PROCESSED)) dir.create(DIR_PROCESSED, recursive = TRUE, showWarnings = FALSE)
 
 # Utilitários compartilhados de classificação/enriquecimento
@@ -159,4 +161,3 @@ clean_and_enrich_data <- function(df_parsed,
 
   df_final
 }
-

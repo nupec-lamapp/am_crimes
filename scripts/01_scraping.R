@@ -12,16 +12,18 @@ suppressPackageStartupMessages({
   library(readr)
   library(lubridate)
   library(stringr)
-  library(stringi)
   library(tibble)
   library(purrr)
 })
 
 options(stringsAsFactors = FALSE)
 
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+
 UA_NUPEC  <- "NUPEC-LAMAPP-MonitorCrimes/1.0 (uso academico, UFAM)"
-DIR_RAW   <- file.path("data", "raw")
-DIR_LOGS  <- "logs"
+if (!exists("DIR_RAW", inherits = TRUE))  DIR_RAW  <- file.path("data", "raw")
+if (!exists("DIR_LOGS", inherits = TRUE)) DIR_LOGS <- "logs"
 LOG_TEXTO <- file.path(DIR_LOGS, "scraping.log")
 
 if (!dir.exists(DIR_RAW)) dir.create(DIR_RAW, recursive = TRUE, showWarnings = FALSE)
@@ -33,7 +35,7 @@ log_event <- function(level = "INFO", ...) {
   msg <- paste(...)
   linha <- sprintf("[%s][%s] %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), level, msg)
   message(linha)
-  cat(linha, file = LOG_TEXTO, append = TRUE, sep = "\n")
+  tryCatch(cat(linha, file = LOG_TEXTO, append = TRUE, sep = "\n"), error = function(e) invisible(NULL))
 }
 
 log_http <- function(url, status, etapa = "LISTAGEM") {
@@ -56,7 +58,17 @@ fazer_get_seguro_v2 <- function(
     Sys.sleep(runif(1, 0.8, 2.5))
 
     resp <- tryCatch(
-      httr::GET(url, httr::user_agent(ua), httr::timeout(timeout_seg)),
+      httr::GET(
+        url,
+        httr::user_agent(ua),
+        httr::timeout(timeout_seg),
+        httr::add_headers(
+          `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          `Accept-Language` = "pt-BR,pt;q=0.9,en;q=0.8",
+          `Cache-Control` = "no-cache",
+          `Pragma` = "no-cache"
+        )
+      ),
       error = function(e) {
         log_event("ERROR", "[GET_V2]", url, "->", e$message)
         NULL
@@ -97,7 +109,13 @@ fazer_get_seguro <- function(url) {
     resp <- httr::GET(
       url,
       httr::timeout(30),
-      httr::user_agent(UA_NUPEC)
+      httr::user_agent(UA_NUPEC),
+      httr::add_headers(
+        `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        `Accept-Language` = "pt-BR,pt;q=0.9,en;q=0.8",
+        `Cache-Control` = "no-cache",
+        `Pragma` = "no-cache"
+      )
     )
 
     status <- httr::status_code(resp)
@@ -412,6 +430,247 @@ coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
 registrar_coletor("emtempo", coletar_emtempo)
 
 ############################################################
+# Helpers e coletor D24AM
+############################################################
+
+parse_pubdate_d24 <- function(txt) {
+  if (is.null(txt) || length(txt) == 0) return(NA_Date_)
+  parsed <- suppressWarnings(
+    lubridate::parse_date_time(
+      txt,
+      orders = c("a, d b Y H:M:S z", "d b Y H:M:S z", "Y-m-d H:M:S"),
+      tz = "America/Manaus"
+    )
+  )
+  as.Date(parsed)
+}
+
+converter_data_ptbr <- function(txt) {
+  if (is.null(txt) || length(txt) == 0) return(NA_Date_)
+  txt_ascii <- suppressWarnings(iconv(txt, from = "", to = "ASCII//TRANSLIT"))
+  txt_limpo <- tolower(stringr::str_trim(ifelse(is.na(txt_ascii), txt, txt_ascii)))
+  meses <- c(
+    janeiro = 1, fevereiro = 2, marco = 3,
+    abril = 4, maio = 5, junho = 6, julho = 7,
+    agosto = 8, setembro = 9, outubro = 10,
+    novembro = 11, dezembro = 12
+  )
+  padrao_extenso <- "(\\d{1,2})\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\\s+de\\s+(\\d{4})"
+  m <- stringr::str_match(txt_limpo, padrao_extenso)
+  if (!all(is.na(m))) {
+    dia <- as.integer(m[2])
+    nome_mes <- m[3]
+    mes <- meses[[nome_mes]]
+    ano <- as.integer(m[4])
+    if (!is.na(dia) && !is.na(mes) && !is.na(ano)) {
+      return(as.Date(sprintf("%04d-%02d-%02d", ano, mes, dia)))
+    }
+  }
+  num <- stringr::str_match(txt_limpo, "(\\d{1,2})/(\\d{1,2})/(\\d{4})")
+  if (!all(is.na(num))) {
+    dia <- as.integer(num[2])
+    mes <- as.integer(num[3])
+    ano <- as.integer(num[4])
+    if (!is.na(dia) && !is.na(mes) && !is.na(ano)) {
+      return(as.Date(sprintf("%04d-%02d-%02d", ano, mes, dia)))
+    }
+  }
+  NA_Date_
+}
+
+extrair_data_publicacao_d24 <- function(doc) {
+  d <- extrair_data_publicacao(doc)
+  if (!is.na(d)) return(d)
+  node <- rvest::html_element(doc, ".td-post-date time, time.entry-date")
+  if (!inherits(node, "xml_node")) node <- rvest::html_element(doc, ".single__meta time, .single__meta span")
+  if (!inherits(node, "xml_node")) return(NA_Date_)
+  texto <- rvest::html_text(node, trim = TRUE)
+  converter_data_ptbr(texto)
+}
+
+coletar_d24am_feed <- function(data_inicio, data_fim, feed_urls) {
+  feed_doc <- NULL
+  feed_usado <- NULL
+
+  for (fu in feed_urls) {
+    resp <- fazer_get_seguro_v2(fu)
+    if (is.null(resp)) next
+
+    pagina_xml <- tryCatch(
+      httr::content(resp, as = "text", encoding = "UTF-8"),
+      error = function(e) ""
+    )
+    doc <- tryCatch(xml2::read_xml(pagina_xml), error = function(e) NULL)
+    if (!is.null(doc)) {
+      feed_doc <- doc
+      feed_usado <- fu
+      break
+    }
+  }
+
+  if (is.null(feed_doc)) {
+    log_event("WARN", "[D24AM] Feed RSS indisponivel.")
+    return(tibble())
+  }
+
+  itens <- xml2::xml_find_all(feed_doc, ".//item")
+  if (length(itens) == 0) {
+    log_event("WARN", "[D24AM] Feed sem itens: ", feed_usado)
+    return(tibble())
+  }
+
+  noticias <- purrr::map_dfr(seq_along(itens), function(i) {
+    item <- itens[[i]]
+    titulo <- xml2::xml_text(xml2::xml_find_first(item, "title"))
+    link   <- xml2::xml_text(xml2::xml_find_first(item, "link"))
+    pub    <- xml2::xml_text(xml2::xml_find_first(item, "pubDate"))
+    data_pub <- parse_pubdate_d24(pub)
+    tibble(
+      portal          = "d24am",
+      data_publicacao = as.Date(data_pub),
+      titulo          = normalizar(titulo),
+      url             = link
+    )
+  }) %>%
+    filter(!is.na(data_publicacao))
+
+  noticias <- noticias %>%
+    distinct(url, .keep_all = TRUE) %>%
+    filter(data_publicacao >= data_inicio, data_publicacao <= data_fim)
+
+  if (nrow(noticias) == 0) {
+    log_event("WARN", "[D24AM] Feed nao trouxe noticias no intervalo (", feed_usado, ").")
+    return(tibble())
+  }
+
+  log_event("INFO", sprintf("[D24AM][FEED] %d noticias obtidas (%s).", nrow(noticias), feed_usado))
+  noticias %>% mutate(crime_violento = eh_crime_violento(titulo))
+}
+
+coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
+  base_url    <- "https://d24am.com/policia/"
+  max_paginas <- config$max_paginas %||% 40
+
+  noticias <- list()
+  pagina_atual <- 1
+  dominio <- get_domain(base_url)
+
+  log_event("INFO", sprintf("--- Iniciando busca em '%s' ---", base_url))
+
+  while (pagina_atual <= max_paginas) {
+    url_listagem <- if (pagina_atual == 1) {
+      base_url
+    } else {
+      sprintf("%spage/%d/", base_url, pagina_atual)
+    }
+
+    log_event("DEBUG", sprintf("[D24AM] Processando pagina %d ...", pagina_atual))
+    resp <- fazer_get_seguro_v2(url_listagem)
+    if (is.null(resp)) {
+      log_event("ERROR", "[D24AM] Falha ao acessar listagem. Parando.")
+      break
+    }
+
+    pagina_html <- tryCatch(
+      httr::content(resp, as = "text", encoding = "UTF-8"),
+      error = function(e) ""
+    )
+    doc <- tryCatch(xml2::read_html(pagina_html), error = function(e) NULL)
+    if (is.null(doc)) {
+      log_event("ERROR", "[D24AM] Falha ao ler HTML da listagem.")
+      break
+    }
+
+    links_nodes <- rvest::html_elements(
+      doc,
+      "article h2 a, article h3 a, article .entry-title a, .td-module-thumb > a, .td-block-span6 a"
+    )
+    if (length(links_nodes) == 0) {
+      log_event("INFO", sprintf("[D24AM] Nenhum link encontrado na pagina %d. Encerrando.", pagina_atual))
+      break
+    }
+
+    df_links <- tibble(
+      titulo = rvest::html_text(links_nodes, trim = TRUE),
+      href   = rvest::html_attr(links_nodes, "href")
+    ) %>%
+      filter(!is.na(href), href != "", nchar(titulo) > 5) %>%
+      mutate(
+        href = dplyr::if_else(startsWith(href, "/"), paste0(dominio, href), href)
+      ) %>%
+      filter(grepl("d24am\\.com", href)) %>%
+      distinct(href, .keep_all = TRUE)
+
+    n_processados <- 0
+    n_antigos <- 0
+
+    for (i in seq_len(nrow(df_links))) {
+      link <- df_links$href[i]
+      tit  <- df_links$titulo[i]
+
+      if (!grepl("^https?://", link)) next
+      resp_art <- fazer_get_seguro_v2(link)
+      if (is.null(resp_art)) next
+
+      pag_art <- tryCatch(httr::content(resp_art, as = "text", encoding = "UTF-8"), error = function(e) "")
+      if (pag_art == "") next
+
+      doc_art <- tryCatch(xml2::read_html(pag_art), error = function(e) NULL)
+      if (is.null(doc_art)) next
+
+      data_pub <- extrair_data_publicacao_d24(doc_art)
+      n_processados <- n_processados + 1
+
+      if (is.na(data_pub)) next
+      if (data_pub > data_fim) next
+      if (data_pub < data_inicio) {
+        n_antigos <- n_antigos + 1
+        next
+      }
+
+      noticias[[length(noticias) + 1]] <- tibble(
+        portal          = "d24am",
+        data_publicacao = format(data_pub, "%Y-%m-%d"),
+        titulo          = normalizar(tit),
+        url             = link
+      )
+      log_event("DEBUG", sprintf("[D24AM][GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+    }
+
+    if (n_processados > 0 && n_antigos == n_processados) {
+      log_event("INFO", sprintf("[D24AM] Artigos da pagina %d sao anteriores a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    pagina_atual <- pagina_atual + 1
+  }
+
+  if (length(noticias) == 0) {
+    log_event("WARN", "[D24AM] Nenhuma noticia encontrada no intervalo.")
+    return(tibble())
+  }
+
+  bind_rows(noticias) %>%
+    mutate(crime_violento = eh_crime_violento(titulo))
+}
+
+coletar_d24am <- function(data_inicio, data_fim, config = list()) {
+  feed_urls <- config$feed_urls %||% c(
+    "https://d24am.com/policia/feed/",
+    "https://d24am.com/category/policia/feed/"
+  )
+  noticias <- coletar_d24am_feed(data_inicio, data_fim, feed_urls)
+  if (nrow(noticias) > 0) return(noticias)
+
+  log_event("WARN", "[D24AM] Tentando fallback via listagem HTML.")
+  coletar_d24am_listagem(data_inicio, data_fim, config)
+}
+
+registrar_coletor("d24am", coletar_d24am)
+
+
+
+############################################################
 # Fun‡Æo principal
 ############################################################
 
@@ -443,8 +702,14 @@ rodar_scraping <- function(data_inicio = Sys.Date(),
                             format(data_inicio, "%Y%m%d"),
                             format(data_fim,    "%Y%m%d"))
     caminho <- file.path(DIR_RAW, nome_arquivo)
-    readr::write_csv(df, caminho)
-    log_event("INFO", sprintf("[%s] Arquivo salvo em: %s", portal, caminho))
+    ok_salvo <- tryCatch({
+      readr::write_csv(df, caminho)
+      TRUE
+    }, error = function(e) {
+      log_event("ERROR", sprintf("[%s] Falha ao salvar CSV em %s: %s", portal, caminho, e$message))
+      FALSE
+    })
+    if (ok_salvo) log_event("INFO", sprintf("[%s] Arquivo salvo em: %s", portal, caminho))
 
     log_entry <- tibble(
       timestamp   = Sys.time(),
@@ -456,7 +721,10 @@ rodar_scraping <- function(data_inicio = Sys.Date(),
     )
 
     log_path <- file.path(DIR_LOGS, "scraping_log.csv")
-    write_csv(log_entry, log_path, append = file.exists(log_path))
+    tryCatch(
+      write_csv(log_entry, log_path, append = file.exists(log_path)),
+      error = function(e) log_event("WARN", sprintf("Falha ao registrar scraping_log.csv: %s", e$message))
+    )
 
     df
   })

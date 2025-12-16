@@ -1,6 +1,6 @@
 ############################################################
 # 02_parse.R
-# Leitura e padronização inicial dos dados brutos
+# Leitura e padronizacao inicial dos dados brutos
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
 
@@ -9,21 +9,53 @@ suppressPackageStartupMessages({
   library(readr)
   library(purrr)
   library(tibble)
+  library(stringr)
 })
 
 options(stringsAsFactors = FALSE)
 
-DIR_RAW  <- file.path("data", "raw")
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+if (!exists("DIR_RAW", inherits = TRUE)) DIR_RAW <- file.path("data", "raw")
+
+normalizar_para_dup <- function(titulo) {
+  if (is.null(titulo)) return("")
+  titulo <- tolower(titulo)
+  titulo <- suppressWarnings(iconv(titulo, from = "", to = "ASCII//TRANSLIT"))
+  titulo <- stringr::str_replace_all(titulo, "[[:punct:]]", " ")
+  stringr::str_squish(titulo)
+}
+
+remover_duplicados_janela <- function(df, dias = 7) {
+  if (!"data_publicacao" %in% names(df)) return(df)
+  df %>%
+    mutate(titulo_norm = normalizar_para_dup(titulo)) %>%
+    arrange(titulo_norm, data_publicacao, portal, url) %>%
+    group_by(titulo_norm) %>%
+    mutate(
+      diff_prev = as.numeric(difftime(data_publicacao, lag(data_publicacao), units = "days")),
+      duplicado_janela = !is.na(diff_prev) & diff_prev <= dias
+    ) %>%
+    ungroup() %>%
+    {
+      qtd <- sum(.$duplicado_janela, na.rm = TRUE)
+      if (qtd > 0) {
+        message("Removendo ", qtd, " registros duplicados (janela +/-", dias, " dias).")
+      }
+      filter(., !duplicado_janela | is.na(duplicado_janela)) %>%
+        select(-titulo_norm, -diff_prev, -duplicado_janela)
+    }
+}
 
 ############################################################
 # parse_raw_files()
-# Lê todos os arquivos CSV em data/raw/, garante colunas
-# mínimas e retorna um data.frame padronizado.
+# Le todos os arquivos CSV em data/raw/, garante colunas
+# minimas e retorna um data.frame padronizado.
 ############################################################
 
 parse_raw_files <- function(dir_raw = DIR_RAW) {
   if (!dir.exists(dir_raw)) {
-    stop("Diretório data/raw/ não encontrado (", dir_raw, "). Rode 01_scraping.R primeiro.")
+    stop("Diretorio data/raw/ nao encontrado (", dir_raw, "). Rode 01_scraping.R primeiro.")
   }
 
   arquivos_raw <- list.files(dir_raw, pattern = "\\.csv$", full.names = TRUE)
@@ -52,8 +84,8 @@ parse_raw_files <- function(dir_raw = DIR_RAW) {
     stop("Colunas essenciais ausentes em df_raw: ", paste(faltando, collapse = ", "))
   }
 
-  message("Total de registros brutos após junção/deduplicação: ", nrow(df_raw))
+  message("Total de registros brutos apos juncao/deduplicacao: ", nrow(df_raw))
 
-  df_raw
+  remover_duplicados_janela(df_raw, dias = 7)
 }
 

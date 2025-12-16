@@ -5,18 +5,24 @@
 
 suppressPackageStartupMessages({
   library(stringr)
-  library(stringi)
   library(purrr)
 })
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
+
+remover_acentos <- function(texto) {
+  if (requireNamespace("stringi", quietly = TRUE)) {
+    return(stringi::stri_trans_general(texto, "Latin-ASCII"))
+  }
+  suppressWarnings(iconv(texto, from = "", to = "ASCII//TRANSLIT"))
+}
 
 normalizar_texto <- function(texto) {
   if (is.null(texto)) return("")
   texto <- as.character(texto)
   texto[is.na(texto)] <- ""
   texto <- tolower(texto)
-  texto <- stringi::stri_trans_general(texto, "Latin-ASCII")
+  texto <- remover_acentos(texto)
   stringr::str_trim(texto)
 }
 

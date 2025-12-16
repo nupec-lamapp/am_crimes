@@ -24,15 +24,20 @@ suppressPackageStartupMessages({
   library(forcats)
 })
 
-dir.create("outputs", showWarnings = FALSE)
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+if (!exists("DIR_OUTPUTS", inherits = TRUE)) DIR_OUTPUTS <- "outputs"
+if (!exists("DIR_PROCESSED", inherits = TRUE)) DIR_PROCESSED <- file.path("data", "processed")
+dir.create(DIR_OUTPUTS, showWarnings = FALSE, recursive = TRUE)
+out_path <- function(x) file.path(DIR_OUTPUTS, x)
 
 ############################################################
 # 1. Leitura da base classificada
 ############################################################
 
-cat("Lendo data/processed/crimes_classificados.csv ...\n")
+cat("Lendo crimes_classificados.csv ...\n")
 
-df <- read_csv("data/processed/crimes_classificados.csv",
+df <- read_csv(file.path(DIR_PROCESSED, "crimes_classificados.csv"),
                show_col_types = FALSE) %>%
   mutate(
     data_publicacao = as.Date(data_publicacao),
@@ -77,8 +82,8 @@ resumo_geral <- viol %>%
     )
   )
 
-write_csv(resumo_geral, "outputs/04_resumo_geral.csv")
-cat("Resumo geral salvo em outputs/04_resumo_geral.csv\n")
+write_csv(resumo_geral, out_path("04_resumo_geral.csv"))
+cat("Resumo geral salvo em ", out_path("04_resumo_geral.csv"), "\n")
 
 ############################################################
 # 4. Resumos por categoria e tipo de crime
@@ -88,13 +93,13 @@ resumo_categoria <- viol %>%
   count(categoria, sort = TRUE) %>%
   mutate(pct = round(100 * n / sum(n), 1))
 
-write_csv(resumo_categoria, "outputs/04_resumo_categoria.csv")
+write_csv(resumo_categoria, out_path("04_resumo_categoria.csv"))
 
 resumo_tipo <- viol %>%
   count(tipo_principal, sort = TRUE) %>%
   mutate(pct = round(100 * n / sum(n), 1))
 
-write_csv(resumo_tipo, "outputs/04_resumo_tipo_principal.csv")
+write_csv(resumo_tipo, out_path("04_resumo_tipo_principal.csv"))
 
 cat("Resumos por categoria e tipo salvos em outputs/04_resumo_*.csv\n")
 
@@ -111,8 +116,8 @@ resumo_portal_cat <- viol %>%
   ) %>%
   ungroup()
 
-write_csv(resumo_portal_cat, "outputs/04_resumo_portal_categoria.csv")
-cat("Resumo portal x categoria salvo em outputs/04_resumo_portal_categoria.csv\n")
+write_csv(resumo_portal_cat, out_path("04_resumo_portal_categoria.csv"))
+cat("Resumo portal x categoria salvo em ", out_path("04_resumo_portal_categoria.csv"), "\n")
 
 top_portais <- viol %>%
   count(portal, sort = TRUE) %>%
@@ -137,7 +142,7 @@ p_portal_cat <- resumo_portal_cat %>%
   theme_minimal() +
   theme(legend.position = "none")
 
-ggsave("outputs/04_portal_categoria.png",
+ggsave(out_path("04_portal_categoria.png"),
        p_portal_cat, width = 10, height = 6, dpi = 300)
 
 ############################################################
@@ -153,7 +158,7 @@ resumo_genero_tipo <- viol %>%
   ) %>%
   ungroup()
 
-write_csv(resumo_genero_tipo, "outputs/04_resumo_genero_tipo.csv")
+write_csv(resumo_genero_tipo, out_path("04_resumo_genero_tipo.csv"))
 
 p_genero_tipo <- resumo_genero_tipo %>%
   filter(!is.na(genero_vitima),
@@ -173,7 +178,7 @@ p_genero_tipo <- resumo_genero_tipo %>%
   ) +
   theme_minimal()
 
-ggsave("outputs/04_genero_tipo.png",
+ggsave(out_path("04_genero_tipo.png"),
        p_genero_tipo, width = 10, height = 6, dpi = 300)
 
 resumo_faixa_genero <- viol %>%
@@ -186,7 +191,7 @@ resumo_faixa_genero <- viol %>%
   ) %>%
   ungroup()
 
-write_csv(resumo_faixa_genero, "outputs/04_resumo_faixa_genero.csv")
+write_csv(resumo_faixa_genero, out_path("04_resumo_faixa_genero.csv"))
 
 p_faixa_genero <- resumo_faixa_genero %>%
   ggplot(aes(x = faixa_etaria, y = n, fill = genero_vitima)) +
@@ -203,7 +208,7 @@ p_faixa_genero <- resumo_faixa_genero %>%
   ) +
   theme_minimal()
 
-ggsave("outputs/04_faixa_genero.png",
+ggsave(out_path("04_faixa_genero.png"),
        p_faixa_genero, width = 9, height = 5, dpi = 300)
 
 ############################################################
@@ -225,7 +230,7 @@ p_serie_viol <- serie_viol %>%
   ) +
   theme_minimal()
 
-ggsave("outputs/04_serie_violentos.png",
+ggsave(out_path("04_serie_violentos.png"),
        p_serie_viol, width = 9, height = 4, dpi = 300)
 
 serie_letal <- viol %>%
@@ -243,7 +248,7 @@ p_serie_letal <- serie_letal %>%
   ) +
   theme_minimal()
 
-ggsave("outputs/04_serie_letais.png",
+ggsave(out_path("04_serie_letais.png"),
        p_serie_letal, width = 9, height = 4, dpi = 300)
 
 indice_letal_mensal <- viol %>%
@@ -255,7 +260,7 @@ indice_letal_mensal <- viol %>%
     .groups = "drop"
   )
 
-write_csv(indice_letal_mensal, "outputs/04_indice_letal_mensal.csv")
+write_csv(indice_letal_mensal, out_path("04_indice_letal_mensal.csv"))
 
 p_indice_letal <- indice_letal_mensal %>%
   ggplot(aes(x = mes_ano, y = indice_letal)) +
@@ -269,7 +274,7 @@ p_indice_letal <- indice_letal_mensal %>%
   ) +
   theme_minimal()
 
-ggsave("outputs/04_indice_letal_mensal.png",
+ggsave(out_path("04_indice_letal_mensal.png"),
        p_indice_letal, width = 9, height = 4, dpi = 300)
 
 ############################################################
@@ -282,7 +287,7 @@ tipo_gravidade <- viol %>%
   mutate(pct = round(100 * n / sum(n), 1)) %>%
   ungroup()
 
-write_csv(tipo_gravidade, "outputs/04_tipo_gravidade.csv")
+write_csv(tipo_gravidade, out_path("04_tipo_gravidade.csv"))
 
 if ("genero_vitima" %in% names(viol)) {
   tipo_genero <- viol %>%
@@ -290,7 +295,7 @@ if ("genero_vitima" %in% names(viol)) {
     group_by(tipo_principal) %>%
     mutate(pct = round(100 * n / sum(n), 1)) %>%
     ungroup()
-  write_csv(tipo_genero, "outputs/04_tipo_genero.csv")
+  write_csv(tipo_genero, out_path("04_tipo_genero.csv"))
 }
 
 if ("faixa_etaria" %in% names(viol)) {
@@ -300,7 +305,7 @@ if ("faixa_etaria" %in% names(viol)) {
     group_by(tipo_principal) %>%
     mutate(pct = round(100 * n / sum(n), 1)) %>%
     ungroup()
-  write_csv(tipo_faixa, "outputs/04_tipo_faixa.csv")
+  write_csv(tipo_faixa, out_path("04_tipo_faixa.csv"))
 }
 
 portal_gravidade <- viol %>%
@@ -309,7 +314,7 @@ portal_gravidade <- viol %>%
   mutate(pct = round(100 * n / sum(n), 1)) %>%
   ungroup()
 
-write_csv(portal_gravidade, "outputs/04_portal_gravidade.csv")
+write_csv(portal_gravidade, out_path("04_portal_gravidade.csv"))
 
 cat("Cruzamentos adicionais salvos em outputs/04_*.csv\n")
 
@@ -321,7 +326,7 @@ anomalias <- viol %>%
   filter(categoria == "Outros") %>%
   select(data_publicacao, portal, titulo, tipo_principal, categoria, gravidade)
 
-write_csv(anomalias, "outputs/04_anomalias_classificacao.csv")
+write_csv(anomalias, out_path("04_anomalias_classificacao.csv"))
 
 cat("Análise concluída.\n")
-cat("Arquivos gerados em 'outputs/'.\n")
+cat("Arquivos gerados em '", DIR_OUTPUTS, "'.\n", sep = "")

@@ -24,9 +24,12 @@ options(stringsAsFactors = FALSE)
 # Caminhos
 ############################################################
 
+if (file.exists("R/paths.R")) source("R/paths.R")
+if (exists("crimes_am_set_paths")) crimes_am_set_paths()
+
 DIR_PIPELINE  <- "scripts"
-DIR_PROCESSED <- file.path("data", "processed")
-DIR_OUTPUTS   <- "outputs"
+DIR_PROCESSED <- if (exists("DIR_PROCESSED")) DIR_PROCESSED else file.path("data", "processed")
+DIR_OUTPUTS   <- if (exists("DIR_OUTPUTS")) DIR_OUTPUTS else "outputs"
 
 ############################################################
 # Controle de acesso ao botão "Nova Coleta"
@@ -45,8 +48,12 @@ PIPELINE_AUTH_ENABLED <- length(ADMIN_PIPELINE_KEYS) > 0
 ############################################################
 
 localizar_arquivo <- function(pasta, nome) {
-  caminho <- file.path(pasta, nome)
-  if (file.exists(caminho)) return(caminho)
+  pastas <- unique(na.omit(as.character(pasta)))
+  pastas <- c(pastas, file.path("data", "processed"), "outputs")
+  for (p in unique(pastas)) {
+    caminho <- file.path(p, nome)
+    if (file.exists(caminho)) return(caminho)
+  }
   if (file.exists(nome)) return(nome)
   NULL
 }
@@ -220,4 +227,3 @@ carregar_apresentacao <- function() {
     HTML(sprintf("<p>Erro ao carregar apresentação: %s</p>", e$message))
   })
 }
-
