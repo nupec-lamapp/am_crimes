@@ -430,6 +430,94 @@ coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
 registrar_coletor("emtempo", coletar_emtempo)
 
 ############################################################
+# Coletor G1 Amazonas
+############################################################
+
+parse_pubdate_g1 <- function(txt) {
+  if (is.null(txt) || length(txt) == 0) return(NA_Date_)
+  parsed <- suppressWarnings(
+    lubridate::parse_date_time(
+      txt,
+      orders = c("a, d b Y H:M:S z", "d b Y H:M:S z", "Y-m-d H:M:S"),
+      tz = "UTC"
+    )
+  )
+  as.Date(parsed)
+}
+
+coletar_g1_amazonas <- function(data_inicio, data_fim, config = list()) {
+  feed_url <- config$feed_url %||% "https://g1.globo.com/rss/g1/am/amazonas/"
+
+  log_event("INFO", sprintf("--- Iniciando busca em '%s' ---", feed_url))
+
+  resp <- fazer_get_seguro_v2(feed_url)
+  if (is.null(resp)) {
+    log_event("WARN", "[G1_AM] Falha ao baixar feed RSS.")
+    return(tibble())
+  }
+
+  feed_xml <- tryCatch(
+    httr::content(resp, as = "text", encoding = "UTF-8"),
+    error = function(e) ""
+  )
+  doc <- tryCatch(xml2::read_xml(feed_xml), error = function(e) NULL)
+  if (is.null(doc)) {
+    log_event("ERROR", "[G1_AM] Falha ao parsear XML do feed.")
+    return(tibble())
+  }
+
+  itens <- xml2::xml_find_all(doc, ".//item")
+  if (length(itens) == 0) {
+    log_event("WARN", "[G1_AM] Feed sem itens.")
+    return(tibble())
+  }
+
+  noticias <- purrr::map_dfr(seq_along(itens), function(i) {
+    item <- itens[[i]]
+    titulo <- xml2::xml_text(xml2::xml_find_first(item, "title"))
+    link   <- xml2::xml_text(xml2::xml_find_first(item, "link"))
+    pub    <- xml2::xml_text(xml2::xml_find_first(item, "pubDate"))
+    data_pub <- parse_pubdate_g1(pub)
+
+    tibble(
+      portal          = "g1_amazonas",
+      data_publicacao = data_pub,
+      titulo          = normalizar(titulo),
+      url             = link
+    )
+  }) %>%
+    mutate(
+      data_publicacao = as.Date(data_publicacao),
+      url = dplyr::if_else(
+        !is.na(url) & startsWith(url, "//"),
+        paste0("https:", url),
+        url
+      )
+    ) %>%
+    filter(
+      !is.na(data_publicacao),
+      grepl("g1\\.globo\\.com/am/amazonas", url)
+    ) %>%
+    distinct(url, .keep_all = TRUE) %>%
+    filter(data_publicacao >= data_inicio, data_publicacao <= data_fim)
+
+  if (nrow(noticias) == 0) {
+    log_event("WARN", "[G1_AM] Feed nao trouxe noticias no intervalo.")
+    return(tibble())
+  }
+
+  log_event("INFO", sprintf("[G1_AM] %d noticias no intervalo.", nrow(noticias)))
+
+  noticias %>%
+    mutate(
+      data_publicacao = format(data_publicacao, "%Y-%m-%d"),
+      crime_violento  = eh_crime_violento(titulo)
+    )
+}
+
+registrar_coletor("g1_amazonas", coletar_g1_amazonas)
+
+############################################################
 # Helpers e coletor D24AM
 ############################################################
 

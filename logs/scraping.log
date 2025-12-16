@@ -639,3 +639,7 @@
 [2025-12-16 00:04:46][INFO] Encontrados 10 links na listagem.
 [2025-12-16 00:05:13][INFO] Itens da pagina 14 sao anteriores a 2025-12-01. Parando.
 [2025-12-16 00:05:13][INFO] [emtempo] Arquivo salvo em: ./data/raw/noticias_raw_emtempo_20251201_20251215.csv
+[2025-12-16 00:48:15][INFO] Iniciando scraping para g1_amazonas (14/12/2025 a 14/12/2025)
+[2025-12-16 00:48:15][INFO] --- Iniciando busca em 'https://g1.globo.com/rss/g1/am/amazonas/' ---
+[2025-12-16 00:48:18][INFO] [G1_AM] 8 noticias no intervalo.
+[2025-12-16 00:48:18][INFO] [g1_amazonas] Arquivo salvo em: ./data/raw/noticias_raw_g1_amazonas_20251214_20251214.csv
