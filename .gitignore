@@ -47,6 +47,7 @@ desktop.ini
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+.git\refs\heads\desktop.ini
 
 # Arquivos temporários
 *.tmp
