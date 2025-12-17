@@ -1,19 +1,72 @@
 # R
-.Rproj.user
+.Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
+.Rapp.history
 .httr-oauth
-.quarto
+*.Rproj.user/
+*.Rhistory
+*.RData
+*.Ruserdata
+
+# Quarto
+.quarto/
+_quarto.yml.lock
+
+# Renv
+renv/library/
+renv/staging/
+renv/python/
+renv/local/
+
+# Dados
+data/raw/
+data/exports/
+# Mantém data/processed/ com arquivos essenciais (commitados manualmente)
+
+# Logs
+logs/*.log
+logs/*.csv
+# Mantém estrutura de logs/, mas ignora conteúdo
+
+# Outputs gerados
+outputs/*.csv
+outputs/*.png
+outputs/figs/
+outputs/eval/
+# Arquivos gerados automaticamente pelo pipeline
+
+# Deploy (rsconnect)
+rsconnect/
+*.dcf
 
 # Sistema Operacional
 .DS_Store
 desktop.ini
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Dados e Logs
-data/raw/
+# Arquivos temporários
+*.tmp
+*.bak
+*.swp
+*~
+*.cache
 
-# Renv
+# IDEs e editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
 
-# Temporários
+# Ambiente virtual Python (se houver)
+venv/
+env/
+.venv/
+
+# Arquivos de backup
+*.Rbackup
+*_backup.*
+
