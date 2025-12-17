@@ -3,19 +3,37 @@ Type: Shiny
 Title: Monitor de Crimes Violentos - Amazonas
 Version: 0.0.1
 Author: NuPeC / LAMAPP
-Description: Dashboard Shiny para monitoramento de crimes violentos no Amazonas
+Description: Sistema automatizado para monitoramento de notícias sobre crimes 
+    violentos no Amazonas. Inclui pipeline de coleta (web scraping), 
+    classificação/enriquecimento de dados e dashboard Shiny para visualização.
 License: MIT
 Imports:
     shiny (>= 1.7.0),
     bslib (>= 0.5.0),
     dplyr (>= 1.1.0),
-    ggplot2 (>= 3.4.0),
-    DT (>= 0.28),
+    tidyr,
     readr (>= 2.1.0),
+    tibble,
+    purrr,
+    forcats,
+    ggplot2 (>= 3.4.0),
+    plotly (>= 4.10.0),
+    DT (>= 0.28),
+    reactable (>= 0.4.0),
     lubridate (>= 1.9.0),
     stringr (>= 1.5.0),
+    stringi,
     fs (>= 1.6.0),
-    plotly (>= 4.10.0),
-    reactable (>= 0.4.0)
+    httr,
+    rvest,
+    xml2,
+    tidymodels,
+    textrecipes,
+    glue
+Suggests:
+    testthat (>= 3.0.0),
+    rsconnect
 URL: https://github.com/nupec-lamapp/crimes_am
 BugReports: https://github.com/nupec-lamapp/crimes_am/issues
+Encoding: UTF-8
+LazyData: true
