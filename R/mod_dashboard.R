@@ -293,10 +293,10 @@ mod_dashboard_server <- function(id, dados_enr) {
         select(
           Data = data_pub,
           Portal = portal,
-          Título = titulo,
+          Titulo = titulo,
           Tipo = tipo_principal,
           Gravidade = gravidade,
-          Gênero = genero_vitima
+          Genero = genero_vitima
         ) %>%
         datatable(
           rownames = FALSE,
@@ -312,4 +312,5 @@ mod_dashboard_server <- function(id, dados_enr) {
     })
   })
 }
+
 

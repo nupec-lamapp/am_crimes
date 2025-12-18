@@ -1,6 +1,6 @@
 ############################################################
 # 01_exportar_para_validacao.R
-# Gera CSV com casos prioritários para validação manual
+# Gera CSV com casos prioritÃ¡rios para validaÃ§Ã£o manual
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
 
@@ -22,14 +22,14 @@ arq_class <- file.path(DIR_PROCESSED, "crimes_classificados.csv")
 arq_nlp   <- file.path(DIR_PROCESSED, "crimes_classificados_nlp.csv")
 
 if (!file.exists(arq_class)) {
-  stop("Arquivo crimes_classificados.csv não encontrado em data/processed/. Rode a pipeline primeiro.")
+  stop("Arquivo crimes_classificados.csv nÃ£o encontrado em data/processed/. Rode a pipeline primeiro.")
 }
 
 message("Lendo crimes_classificados.csv ...")
 df <- readr::read_csv(arq_class, show_col_types = FALSE)
 
 if (file.exists(arq_nlp)) {
-  message("Lendo crimes_classificados_nlp.csv para sugestões do modelo...")
+  message("Lendo crimes_classificados_nlp.csv para sugestÃµes do modelo...")
   df_nlp <- readr::read_csv(arq_nlp, show_col_types = FALSE)
 
   df <- df %>%
@@ -47,7 +47,7 @@ df_validar <- df %>%
   mutate(
     nao_classificado = categoria == "Outros" |
       tipo_principal == "Não classificado com precisão" |
-      tipo_principal == "NÆo classificado com precisÆo"
+      tipo_principal == "Não classificado com precisão"
   ) %>%
   filter(
     nao_classificado |
@@ -70,10 +70,10 @@ df_validar <- df %>%
   )
 
 if (nrow(df_validar) == 0) {
-  message("Nenhum caso candidato à validação encontrado nas condições atuais.")
+  message("Nenhum caso candidato Ã  validaÃ§Ã£o encontrado nas condiÃ§Ãµes atuais.")
 } else {
   ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
   arq_out <- file.path(DIR_EXPORTS, paste0("para_validacao_", ts, ".csv"))
   readr::write_csv(df_validar, arq_out)
-  message("Arquivo para validação salvo em: ", arq_out)
+  message("Arquivo para validaÃ§Ã£o salvo em: ", arq_out)
 }
