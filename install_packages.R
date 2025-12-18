@@ -60,40 +60,83 @@ pacotes <- c(
 
 # Função para instalar pacotes (verifica se já está instalado)
 instalar_pacote <- function(pacote) {
-  if (!requireNamespace(pacote, quietly = TRUE)) {
-    cat(sprintf("Instalando %s...\n", pacote))
+  # Verifica se o pacote já está instalado e carregável
+  if (requireNamespace(pacote, quietly = TRUE)) {
+    cat(sprintf("  [OK] %s já está instalado\n", pacote))
+    return(TRUE)
+  }
+  
+  cat(sprintf("Instalando %s...\n", pacote))
+  
+  # Lista de repositórios CRAN para tentar
+  repos_cran <- c(
+    "https://cloud.r-project.org",
+    "https://cran.rstudio.com",
+    "https://cran.r-project.org"
+  )
+  
+  # Tenta instalar de cada repositório até conseguir
+  for (repo in repos_cran) {
     tryCatch({
       install.packages(
         pacote, 
         dependencies = TRUE, 
-        repos = "https://cloud.r-project.org",
-        quiet = FALSE
+        repos = repo,
+        quiet = FALSE,
+        type = "binary"  # Preferir binários no Windows
       )
-      cat(sprintf("  [OK] %s instalado com sucesso\n", pacote))
-      TRUE
+      
+      # Verifica se a instalação foi bem-sucedida
+      if (requireNamespace(pacote, quietly = TRUE)) {
+        cat(sprintf("  [OK] %s instalado com sucesso (de %s)\n", pacote, repo))
+        return(TRUE)
+      } else {
+        stop("Pacote instalado mas não carregável")
+      }
     }, error = function(e) {
-      cat(sprintf("  [ERRO] Falha ao instalar %s: %s\n", pacote, e$message))
-      FALSE
+      # Continua para o próximo repositório
+      return(NULL)
+    }, warning = function(w) {
+      # Avisos não impedem a instalação
+      return(NULL)
     })
-  } else {
-    cat(sprintf("  [OK] %s já está instalado\n", pacote))
-    TRUE
   }
+  
+  # Se chegou aqui, nenhum repositório funcionou
+  cat(sprintf("  [ERRO] Falha ao instalar %s de todos os repositórios tentados\n", pacote))
+  return(FALSE)
 }
 
 # Verificar se o CRAN está acessível
 cat("Verificando conexão com CRAN...\n")
-tryCatch({
-  available.packages(repos = "https://cloud.r-project.org")
-  cat("  [OK] Conexão com CRAN estabelecida\n\n")
-}, error = function(e) {
-  cat("  [ERRO] Não foi possível conectar ao CRAN. Verifique sua conexão com a internet.\n")
-  stop("Não foi possível conectar ao CRAN")
-})
+repos_cran <- c(
+  "https://cloud.r-project.org",
+  "https://cran.rstudio.com",
+  "https://cran.r-project.org"
+)
+
+cran_ok <- FALSE
+for (repo in repos_cran) {
+  tryCatch({
+    available.packages(repos = repo)
+    cat(sprintf("  [OK] Conexão com CRAN estabelecida (%s)\n\n", repo))
+    cran_ok <- TRUE
+    break
+  }, error = function(e) {
+    # Tenta próximo repositório
+    return(NULL)
+  })
+}
+
+if (!cran_ok) {
+  cat("  [AVISO] Não foi possível conectar a nenhum repositório CRAN.\n")
+  cat("  Tentando continuar mesmo assim...\n\n")
+}
 
 # Instalar pacotes
 cat("Iniciando instalação dos pacotes...\n\n")
-resultados <- sapply(pacotes, instalar_pacote)
+resultados <- vapply(pacotes, instalar_pacote, logical(1))
+names(resultados) <- pacotes
 
 # Resumo
 cat("\n========================================\n")
