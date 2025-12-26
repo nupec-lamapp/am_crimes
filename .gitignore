@@ -22,8 +22,9 @@ renv/local/
 
 # Dados (gerados)
 data/raw/
-data/exports/
 data/
+data/exports/
+data/processed/*
 !data/processed/.gitkeep
 # Mantem data/processed/ apenas para arquivos essenciais ja versionados
 
@@ -47,6 +48,7 @@ desktop.ini
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+.git\refs\heads\desktop.ini
 
 # Arquivos temporarios
 *.tmp
@@ -69,15 +71,3 @@ env/
 # Arquivos de backup
 *.Rbackup
 *_backup.*
-
-# Seguranca - Credenciais e tokens
-configurar_rsconnect.R
-*.key
-*.pem
-*.p12
-.env
-.env.local
-secrets/
-credentials/
-.Rproj.user
-.quarto

@@ -1,4 +1,4 @@
- ############################################################
+############################################################
 # APP SHINY - Monitor de Crimes Violentos (Amazonas)
 # Versao 0.0.5 - Arquitetura modular
 ############################################################
@@ -18,7 +18,7 @@ ui <- fluidPage(
   ),
 
   tags$head(
-    tags$link(rel = "stylesheet", href = "www/style.css")
+    tags$link(rel = "stylesheet", href = "style.css")
   ),
 
   navbarPage(

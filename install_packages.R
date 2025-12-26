@@ -38,7 +38,6 @@ pacotes <- c(
   "lubridate",    # Manipulacao de datas (>= 1.9.0)
   "stringr",      # Manipulacao de strings (>= 1.5.0)
   "stringi",      # Funcoes avancadas de string (usado em classification_utils.R)
-  "stringdist",   # Distancias de strings
   
   # ===== Sistema de Arquivos =====
   "fs",           # Operacoes de sistema de arquivos (>= 1.6.0)

@@ -50,21 +50,6 @@ mod_relatorios_ui <- function(id) {
         )
       )
     )
-    ,
-    fluidRow(
-      column(
-        width = 12,
-        div(
-          class = "card-panel",
-          h4("Possíveis duplicados entre portais"),
-          p(
-            "Listagem dos grupos identificados pela heurística de deduplicação. ",
-            "Útil para validar se notícias de diferentes portais descrevem o mesmo crime."
-          ),
-          DTOutput(ns("tbl_duplicados"))
-        )
-      )
-    )
   )
 }
 
@@ -88,12 +73,6 @@ mod_relatorios_server <- function(id, dados_est) {
       est <- dados_est()
       if (is.null(est$anomalias)) return(NULL)
       est$anomalias
-    })
-
-    duplicados <- reactive({
-      est <- dados_est()
-      if (is.null(est$duplicados)) return(NULL)
-      est$duplicados
     })
 
     output$tbl_resumo_geral <- renderDT({
@@ -142,21 +121,6 @@ mod_relatorios_server <- function(id, dados_est) {
           dom = "Bfrtip",
           buttons = c("copy", "csv"),
           pageLength = 10,
-          scrollX = TRUE
-        )
-      )
-    })
-    output$tbl_duplicados <- renderDT({
-      df <- duplicados()
-      validate(need(!is.null(df), "Relatório de duplicados ainda não foi gerado. Rode a pipeline completa."))
-      datatable(
-        df,
-        rownames = FALSE,
-        extensions = "Buttons",
-        options = list(
-          dom = "Bfrtip",
-          buttons = c("copy", "csv"),
-          pageLength = 15,
           scrollX = TRUE
         )
       )

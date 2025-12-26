@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script de Versionamento - Monitor de Crimes Violentos v0.0.4
+# Script de Versionamento - Monitor de Crimes Violentos v0.0.1
 # Execute este script para criar uma nova versão no GitHub
 
-VERSION="0.0.4"
-TAG_MESSAGE="Versão 0.0.4"
+VERSION="0.0.1"
+TAG_MESSAGE="Versão 0.0.1 - Layout horizontal de logos e aba Apresentação integrada"
 
 echo "=========================================="
 echo "Versionamento - Monitor de Crimes Violentos"

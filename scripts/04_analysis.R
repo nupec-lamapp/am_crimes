@@ -328,37 +328,5 @@ anomalias <- viol %>%
 
 write_csv(anomalias, out_path("04_anomalias_classificacao.csv"))
 
-
-############################################################
-# 10. Relatório de possíveis duplicados entre portais
-############################################################
-
-duplicados_relatorio <- tibble()
-if ("flag_duplicado" %in% names(df) || "dup_id" %in% names(df)) {
-  duplicados_relatorio <- df %>%
-    mutate(
-      flag_dup = if ("flag_duplicado" %in% names(df)) flag_duplicado else FALSE,
-      dup_id   = dplyr::coalesce(dup_id, ifelse(flag_dup, sprintf("DUP-%05d", dplyr::row_number()), NA_character_))
-    ) %>%
-    filter(!is.na(dup_id)) %>%
-    group_by(dup_id) %>%
-    mutate(qtd_grupo = n()) %>%
-    ungroup() %>%
-    arrange(dup_id, data_publicacao) %>%
-    select(
-      dup_id,
-      qtd_grupo,
-      data_publicacao,
-      portal,
-      titulo,
-      url,
-      categoria,
-      tipo_principal,
-      gravidade
-    )
-}
-
-write_csv(duplicados_relatorio, out_path("04_relatorio_duplicados.csv"))
-
 cat("Análise concluída.\n")
 cat("Arquivos gerados em '", DIR_OUTPUTS, "'.\n", sep = "")

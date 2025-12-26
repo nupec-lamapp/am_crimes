@@ -115,9 +115,6 @@ carregar_estaticos <- function() {
   f_res <- localizar_arquivo(DIR_OUTPUTS, "04_resumo_geral.csv")
   if (!is.null(f_res)) lista$resumo <- read_csv(f_res, show_col_types = FALSE)
 
-  f_dup <- localizar_arquivo(DIR_OUTPUTS, "04_relatorio_duplicados.csv")
-  if (!is.null(f_dup)) lista$duplicados <- read_csv(f_dup, show_col_types = FALSE)
-
   lista
 }
 

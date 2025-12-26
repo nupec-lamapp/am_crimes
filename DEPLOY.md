@@ -8,20 +8,15 @@ Antes de fazer o primeiro deploy, configure suas credenciais executando:
 source("configurar_rsconnect.R")
 ```
 
-Ou manualmente no console R (substitua pelos seus valores reais):
+Ou manualmente no console R:
 
 ```r
 rsconnect::setAccountInfo(
   name = 'nupec',
-  token = 'SEU_TOKEN_AQUI',
-  secret = 'SEU_SECRET_AQUI'
+  token = '4ABCB213E3D7D8D1477BC0D752EF4E02',
+  secret = 'XEeRJaE+/2EhskTGm75QS6bKcJ0sZldLbQjZppTk'
 )
 ```
-
-**IMPORTANTE**: Você pode obter suas credenciais em:
-https://www.shinyapps.io/admin/#/tokens
-
-**SEGURANÇA**: Nunca compartilhe ou faça commit de suas credenciais no Git!
 
 **Nota:** Esta configuração precisa ser feita apenas uma vez. As credenciais serão salvas localmente.
 

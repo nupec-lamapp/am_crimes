@@ -4,7 +4,7 @@
 
 O **Monitor de Crimes Violentos - Amazonas** é uma ferramenta experimental de monitoramento automatizado de notícias sobre crimes violentos no estado do Amazonas. O sistema integra tecnologias de **web scraping**, **processamento de linguagem natural (NLP)** e **visualização interativa de dados** para coletar, classificar e analisar notícias policiais publicadas em portais de notícias locais.
 
-**Nota:** a versão atual (0.0.4) extrai informações exclusivamente do portal **A Crítica** (acritica.com).
+**Nota:** a versão atual (0.0.1) extrai informações exclusivamente do portal **A Crítica** (acritica.com).
 
 ### Principais Funcionalidades
 
@@ -46,5 +46,5 @@ O projeto visa contribuir para a pesquisa em **ciência de dados** e **avaliaç�
 
 ## Status do Projeto
 
-O projeto está em **contínua evolução**, com melhorias regulares nos algoritmos de classificação, expansão dos portais monitorados e refinamento das análises estatísticas. A versão atual (0.0.4) monitora exclusivamente o portal **A Crítica**, com planos de expansão para outros portais de notícias do Amazonas. Integra o ecossistema de pesquisa NuPeC/LAMAPP e contribui para o avanço do conhecimento em monitoramento de políticas públicas e análise de dados criminais.
+O projeto está em **contínua evolução**, com melhorias regulares nos algoritmos de classificação, expansão dos portais monitorados e refinamento das análises estatísticas. A versão atual (0.0.1) monitora exclusivamente o portal **A Crítica**, com planos de expansão para outros portais de notícias do Amazonas. Integra o ecossistema de pesquisa NuPeC/LAMAPP e contribui para o avanço do conhecimento em monitoramento de políticas públicas e análise de dados criminais.
 
