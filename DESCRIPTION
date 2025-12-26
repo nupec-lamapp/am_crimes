@@ -1,35 +1,36 @@
 Package: crimes_am
 Type: Shiny
 Title: Monitor de Crimes Violentos - Amazonas
-Version: 0.0.1
+Version: 0.0.5
 Author: NuPeC / LAMAPP
-Description: Sistema automatizado para monitoramento de notícias sobre crimes 
+Description: Sistema automatizado para monitoramento de noticias sobre crimes 
     violentos no Amazonas. Inclui pipeline de coleta (web scraping), 
-    classificação/enriquecimento de dados e dashboard Shiny para visualização.
+    classificacao/enriquecimento de dados e dashboard Shiny para visualizacao.
 License: MIT
 Imports:
     shiny (>= 1.7.0),
     bslib (>= 0.5.0),
     dplyr (>= 1.1.0),
-    tidyr,
+    tidyr (>= 1.3.0),
     readr (>= 2.1.0),
-    tibble,
-    purrr,
-    forcats,
+    tibble (>= 3.2.0),
+    purrr (>= 1.0.0),
+    forcats (>= 1.0.0),
     ggplot2 (>= 3.4.0),
     plotly (>= 4.10.0),
     DT (>= 0.28),
     reactable (>= 0.4.0),
     lubridate (>= 1.9.0),
     stringr (>= 1.5.0),
-    stringi,
+    stringi (>= 1.8.0),
+    stringdist (>= 0.9.10),
     fs (>= 1.6.0),
-    httr,
-    rvest,
-    xml2,
-    tidymodels,
-    textrecipes,
-    glue
+    httr (>= 1.4.0),
+    rvest (>= 1.0.0),
+    xml2 (>= 1.3.0),
+    tidymodels (>= 1.1.0),
+    textrecipes (>= 1.0.0),
+    glue (>= 1.6.0)
 Suggests:
     testthat (>= 3.0.0),
     rsconnect

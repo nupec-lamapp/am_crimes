@@ -1,6 +1,6 @@
 ############################################################
 # global.R
-# Configurações globais e funções auxiliares do app Shiny
+# Configuracoes globais e funcoes auxiliares do app Shiny
 # Projeto: crimes_am - NUPEC / LAMAPP
 ############################################################
 
@@ -18,6 +18,7 @@ suppressPackageStartupMessages({
   library(reactable)
 })
 
+try(Sys.setlocale("LC_CTYPE", "pt_BR.UTF-8"), silent = TRUE)
 options(stringsAsFactors = FALSE)
 
 ############################################################
@@ -32,7 +33,7 @@ DIR_PROCESSED <- if (exists("DIR_PROCESSED")) DIR_PROCESSED else file.path("data
 DIR_OUTPUTS   <- if (exists("DIR_OUTPUTS")) DIR_OUTPUTS else "outputs"
 
 ############################################################
-# Controle de acesso ao botão "Nova Coleta"
+# Controle de acesso ao botao "Nova Coleta"
 ############################################################
 
 pipeline_keys_env <- Sys.getenv("CRIMES_AM_PIPELINE_KEYS", "")
@@ -58,21 +59,21 @@ localizar_arquivo <- function(pasta, nome) {
   NULL
 }
 
-# Heurísticas de gênero/faixa etária específicas da camada visual
+# Heuristicas de genero/faixa etaria especificas da camada visual
 extrair_genero_app <- function(texto) {
   if (is.na(texto)) return("indefinido")
   texto <- tolower(texto)
-  if (str_detect(texto, "\\b(mulher|esposa|namorada|jovem|menina|senhora|mãe|filha|adolescente)\\b")) return("feminino")
+  if (str_detect(texto, "\\b(mulher|esposa|namorada|jovem|menina|senhora|mae|filha|adolescente)\\b")) return("feminino")
   if (str_detect(texto, "\\b(homem|marido|namorado|rapaz|menino|senhor|pai|filho|suspeito)\\b")) return("masculino")
   "indefinido"
 }
 
 classificar_faixa_app <- function(texto) {
-  if (is.na(texto)) return("idade não informada")
+  if (is.na(texto)) return("idade nao informada")
   match <- str_extract(texto, "\\b\\d{1,2}(?=\\s?anos)\\b")
-  if (is.na(match)) return("idade não informada")
+  if (is.na(match)) return("idade nao informada")
   idade <- as.integer(match)
-  if (idade <= 11) return("0-11 (criança)")
+  if (idade <= 11) return("0-11 (crianca)")
   if (idade <= 17) return("12-17 (adolescente)")
   if (idade <= 29) return("18-29 (jovem)")
   if (idade <= 59) return("30-59 (adulto)")
@@ -114,13 +115,16 @@ carregar_estaticos <- function() {
   f_res <- localizar_arquivo(DIR_OUTPUTS, "04_resumo_geral.csv")
   if (!is.null(f_res)) lista$resumo <- read_csv(f_res, show_col_types = FALSE)
 
+  f_dup <- localizar_arquivo(DIR_OUTPUTS, "04_relatorio_duplicados.csv")
+  if (!is.null(f_dup)) lista$duplicados <- read_csv(f_dup, show_col_types = FALSE)
+
   lista
 }
 
 carregar_apresentacao <- function() {
   arquivo <- "APRESENTACAO.md"
   if (!file.exists(arquivo)) {
-    return(HTML("<p>Arquivo de apresentação não encontrado.</p>"))
+    return(HTML("<p>Arquivo de apresentacao nao encontrado.</p>"))
   }
 
   tryCatch({
@@ -224,6 +228,6 @@ carregar_apresentacao <- function() {
 
     HTML(paste(html_parts, collapse = "\n"))
   }, error = function(e) {
-    HTML(sprintf("<p>Erro ao carregar apresentação: %s</p>", e$message))
+    HTML(sprintf("<p>Erro ao carregar apresentacao: %s</p>", e$message))
   })
 }

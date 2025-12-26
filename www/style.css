@@ -107,7 +107,7 @@ body {
   }
 }
 
-/* Responsividade básica */
+/* Responsividade basica */
 @media (max-width: 992px) {
   .kpi-box {
     margin-bottom: 10px;

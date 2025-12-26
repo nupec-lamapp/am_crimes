@@ -2,6 +2,13 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [0.0.4] - 2025-12-XX
+
+### Modificado
+- Versão do projeto atualizada para 0.0.4
+
+---
+
 ## [0.0.1] - 2025-01-XX
 
 ### Adicionado

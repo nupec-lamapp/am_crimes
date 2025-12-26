@@ -1,9 +1,9 @@
 @echo off
-REM Script de Versionamento - Monitor de Crimes Violentos v0.0.1
+REM Script de Versionamento - Monitor de Crimes Violentos v0.0.4
 REM Execute este script para criar uma nova versão no GitHub
 
-set VERSION=0.0.1
-set TAG_MESSAGE=Versão 0.0.1 - Layout horizontal de logos e aba Apresentação integrada
+set VERSION=0.0.4
+set TAG_MESSAGE=Versão 0.0.4
 
 echo ==========================================
 echo Versionamento - Monitor de Crimes Violentos

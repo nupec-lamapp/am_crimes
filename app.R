@@ -1,8 +1,8 @@
-############################################################
+ ############################################################
 # APP SHINY - Monitor de Crimes Violentos (Amazonas)
-# Versão 0.0.2 - Arquitetura modular
+# Versao 0.0.5 - Arquitetura modular
 ############################################################
-  
+
 source("global.R")
 source("R/mod_dashboard.R")
 source("R/mod_relatorios.R")
@@ -18,7 +18,7 @@ ui <- fluidPage(
   ),
 
   tags$head(
-    tags$link(rel = "stylesheet", href = "style.css")
+    tags$link(rel = "stylesheet", href = "www/style.css")
   ),
 
   navbarPage(
@@ -26,14 +26,16 @@ ui <- fluidPage(
     id = "tabs_main",
 
     tabPanel(
-      title = tagList(icon("info-circle"), "Apresentação"),
+      title = tagList(icon("info-circle"), "Apresentacao"),
       fluidRow(
         column(
           width = 12,
           div(
             class = "header-nupec",
-            div(class = "titulo-projeto",
-                "Monitor de Crimes Violentos - Amazonas"),
+            div(
+              class = "titulo-projeto",
+              "Monitor de Crimes Violentos - Amazonas"
+            ),
             div(
               class = "subtitulo-projeto",
               "NUPEC / LAMAPP"
@@ -81,12 +83,12 @@ ui <- fluidPage(
     ),
 
     tabPanel(
-      title = tagList(icon("tachometer-alt"), "Monitor Dinâmico"),
+      title = tagList(icon("tachometer-alt"), "Monitor Dinamico"),
       mod_dashboard_ui("dashboard")
     ),
 
     tabPanel(
-      title = tagList(icon("file-alt"), "Relatórios & Auditoria"),
+      title = tagList(icon("file-alt"), "Relatorios & Auditoria"),
       mod_relatorios_ui("relatorios")
     ),
     tabPanel(
@@ -101,7 +103,7 @@ server <- function(input, output, session) {
   dados_est <- reactiveVal(carregar_estaticos())
 
   output$ultima_atualizacao <- renderText({
-    paste0("Última atualização: ",
+    paste0("Ultima atualizacao: ",
            format(Sys.time(), "%d/%m/%Y %H:%M"))
   })
 

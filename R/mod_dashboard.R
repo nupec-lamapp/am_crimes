@@ -1,6 +1,6 @@
 ############################################################
 # mod_dashboard.R
-# Módulo principal de monitoramento dinâmico
+# Modulo principal de monitoramento dinamico
 ############################################################
 
 mod_dashboard_ui <- function(id) {
@@ -14,7 +14,7 @@ mod_dashboard_ui <- function(id) {
           h5("Filtros"),
           dateRangeInput(
             ns("filtro_data"),
-            "Período:",
+            "Periodo:",
             start = Sys.Date() - 30,
             end   = Sys.Date(),
             format = "dd/mm/yyyy",
@@ -22,10 +22,14 @@ mod_dashboard_ui <- function(id) {
           ),
           selectInput(ns("filtro_portal"), "Portal:", choices = "Todos"),
           div(class = "text-muted small", textOutput(ns("info_portal_periodo"))),
-          selectInput(ns("fonte_tipo"), "Fonte de tipo:", choices = c("Heurística" = "heur", "Modelo NLP" = "ml")),
+          selectInput(ns("fonte_tipo"), "Fonte de tipo:", choices = c("Heuristica" = "heur", "Modelo NLP" = "ml")),
           selectInput(ns("filtro_tipo"), "Tipo de crime:", choices = "Todos"),
-          selectInput(ns("filtro_gravidade"), "Gravidade:", choices = c("Todas", "baixa", "média", "alta", "muito alta", "extrema")),
-          actionButton(ns("btn_aplicar"), "Aplicar filtros", class = "btn-primary btn-sm"),
+          selectInput(ns("filtro_gravidade"), "Gravidade:", choices = c("Todas", "baixa", "media", "alta", "muito alta", "extrema")),
+          div(
+            class = "d-flex gap-1",
+            actionButton(ns("btn_aplicar"), "Aplicar filtros", class = "btn-primary btn-sm"),
+            actionButton(ns("btn_refresh"), "Atualizar dados", class = "btn btn-outline-secondary btn-sm")
+          ),
           tags$hr(),
           h6("Cobertura por portal"),
           tableOutput(ns("tab_resumo_portal"))
@@ -39,7 +43,7 @@ mod_dashboard_ui <- function(id) {
             width = 4,
             div(
               class = "kpi-box",
-              div(class = "kpi-title", "Notícias no recorte"),
+              div(class = "kpi-title", "Noticias no recorte"),
               div(class = "kpi-value", textOutput(ns("kpi_total"))),
               div(class = "kpi-sub", textOutput(ns("kpi_periodo")))
             )
@@ -65,7 +69,7 @@ mod_dashboard_ui <- function(id) {
         tabsetPanel(
           id = ns("tabs_dyn"),
           tabPanel(
-            "Série Temporal",
+            "Serie Temporal",
             plotlyOutput(ns("plot_serie"))
           ),
           tabPanel(
@@ -73,7 +77,7 @@ mod_dashboard_ui <- function(id) {
             plotlyOutput(ns("plot_tipo"))
           ),
           tabPanel(
-            "Tabela de Notícias",
+            "Tabela de Noticias",
             DTOutput(ns("tab_todas"))
           )
         )
@@ -178,6 +182,11 @@ mod_dashboard_server <- function(id, dados_enr) {
       df
     }, ignoreNULL = FALSE)
 
+    observeEvent(input$btn_refresh, {
+      dados_enr(carregar_principal())
+      showNotification("Dados recarregados do disco.", type = "message")
+    })
+
     output$kpi_total <- renderText({
       df <- dados_filt()
       if (is.null(df)) return("0")
@@ -207,7 +216,7 @@ mod_dashboard_server <- function(id, dados_enr) {
       n_letais <- sum(df$categoria == "Crime Letal Violento", na.rm = TRUE)
       if (n_total == 0) return("")
       pct <- round(100 * n_letais / n_total, 1)
-      sprintf("%s%% das notícias do recorte", format(pct, decimal.mark = ","))
+      sprintf("%s%% das noticias do recorte", format(pct, decimal.mark = ","))
     })
 
     output$kpi_top_tipos <- renderText({
@@ -222,7 +231,7 @@ mod_dashboard_server <- function(id, dados_enr) {
         count(.data[[col_tipo]], sort = TRUE) %>%
         head(3) %>%
         pull(.data[[col_tipo]]) %>%
-        paste(collapse = " • ")
+        paste(collapse = " | ")
     })
 
     output$plot_serie <- renderPlotly({
@@ -237,9 +246,9 @@ mod_dashboard_server <- function(id, dados_enr) {
         geom_line(color = "#2980b9") +
         geom_point(color = "#2980b9") +
         labs(
-          title = "Notícias por dia",
-          x = "Data de publicação",
-          y = "Número de notícias"
+          title = "Noticias por dia",
+          x = "Data de publicacao",
+          y = "Numero de noticias"
         ) +
         theme_minimal()
 
@@ -277,7 +286,7 @@ mod_dashboard_server <- function(id, dados_enr) {
         labs(
           title = "Top tipos de crime no recorte",
           x = "Tipo",
-          y = "Número de notícias (e % do total)"
+          y = "Numero de noticias (e % do total)"
         ) +
         theme_minimal()
 
@@ -312,5 +321,3 @@ mod_dashboard_server <- function(id, dados_enr) {
     })
   })
 }
-
-

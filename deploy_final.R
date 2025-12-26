@@ -1,6 +1,6 @@
 ############################################################
 # Script de Deploy FINAL - Monitor de Crimes Violentos
-# Versão 0.0.1 - Com todas as correções
+# Versão 0.0.4 - Com todas as correções
 ############################################################
 
 library(rsconnect)

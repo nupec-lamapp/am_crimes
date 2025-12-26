@@ -2,7 +2,7 @@
 
 Este documento contém instruções para versionar o projeto no GitHub.
 
-## Versão Atual: 0.0.1
+## Versão Atual: 0.0.4
 
 ## Comandos para Versionamento
 
@@ -25,27 +25,22 @@ git add VERSIONAMENTO.md
 git add .
 ```
 
-### 3. Criar Commit da Versão 0.0.1
+### 3. Criar Commit da Versão 0.0.4
 
 ```bash
-git commit -m "v0.0.1: Layout horizontal de logos, aba Apresentação como primeira guia e melhorias na série mensal
+git commit -m "v0.0.4: Atualização de versão
 
-- Adicionada aba Apresentação como primeira guia do dashboard
-- Logos reposicionadas horizontalmente no cabeçalho (UFAM/ICET à esquerda, LAMAPP/NuPeC à direita)
-- Série mensal corrigida para ser reativa aos filtros
-- Melhorado tratamento de erros para evitar páginas em branco
-- Criado arquivo APRESENTACAO.md com descrição completa do projeto
-- Criado CHANGELOG.md para documentação de versões"
+- Versão do projeto atualizada para 0.0.4"
 ```
 
 ### 4. Criar Tag de Versão
 
 ```bash
 # Criar tag anotada
-git tag -a v0.0.1 -m "Versão 0.0.1 - Layout horizontal de logos e aba Apresentação integrada"
+git tag -a v0.0.4 -m "Versão 0.0.4"
 
 # Ou criar tag simples
-git tag v0.0.1
+git tag v0.0.4
 ```
 
 ### 5. Enviar para o GitHub
@@ -58,7 +53,7 @@ git push origin main
 git push origin master
 
 # Enviar tags
-git push origin v0.0.1
+git push origin v0.0.4
 
 # Ou enviar todas as tags
 git push origin --tags
@@ -74,6 +69,7 @@ git push origin --tags
 
 ### Histórico de Versões
 
+- **v0.0.4** (2025-12-XX): Atualização de versão
 - **v0.0.1** (2025-01-XX): Versão inicial - Layout horizontal, aba Apresentação, melhorias na série mensal, sistema de versionamento
 
 ## Arquivos Importantes para Versionamento

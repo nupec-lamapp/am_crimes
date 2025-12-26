@@ -83,7 +83,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       if (length(portais) == 0) {
         portais <- "Todos"
         if (!nzchar(isolate(portais_status()))) {
-          portais_status("Nenhum coletor disponível. Verifique dependências/pacotes do scraper.")
+          portais_status("Nenhum coletor disponivel. Verifique dependencias/pacotes do scraper.")
         }
       }
       updateSelectInput(

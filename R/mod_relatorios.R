@@ -1,6 +1,6 @@
 ############################################################
 # mod_relatorios.R
-# Módulo de relatórios e auditoria (outputs estáticos)
+# Modulo de relatorios e auditoria (outputs estaticos)
 ############################################################
 
 mod_relatorios_ui <- function(id) {
@@ -12,7 +12,7 @@ mod_relatorios_ui <- function(id) {
         width = 12,
         div(
           class = "card-panel",
-          h3("Relatórios & Auditoria")
+          h3("Relatorios & Auditoria")
         )
       )
     ),
@@ -31,7 +31,7 @@ mod_relatorios_ui <- function(id) {
         width = 12,
         div(
           class = "card-panel",
-          h4("Índice de letalidade (mensal)"),
+          h4("Indice de letalidade (mensal)"),
           plotlyOutput(ns("plot_indice_mensal"))
         )
       )
@@ -41,12 +41,27 @@ mod_relatorios_ui <- function(id) {
         width = 12,
         div(
           class = "card-panel",
-          h4("Anomalias de classificação"),
+          h4("Anomalias de classificacao"),
           p(
-            "Notícias rotuladas como 'Outros' ou fora dos padrões principais, ",
-            "úteis para auditoria do classificador e ajustes de regras."
+            "Noticias rotuladas como 'Outros' ou fora dos padroes principais, ",
+            "uteis para auditoria do classificador e ajustes de regras."
           ),
           DTOutput(ns("tbl_anomalias"))
+        )
+      )
+    )
+    ,
+    fluidRow(
+      column(
+        width = 12,
+        div(
+          class = "card-panel",
+          h4("Possíveis duplicados entre portais"),
+          p(
+            "Listagem dos grupos identificados pela heurística de deduplicação. ",
+            "Útil para validar se notícias de diferentes portais descrevem o mesmo crime."
+          ),
+          DTOutput(ns("tbl_duplicados"))
         )
       )
     )
@@ -75,9 +90,15 @@ mod_relatorios_server <- function(id, dados_est) {
       est$anomalias
     })
 
+    duplicados <- reactive({
+      est <- dados_est()
+      if (is.null(est$duplicados)) return(NULL)
+      est$duplicados
+    })
+
     output$tbl_resumo_geral <- renderDT({
       df <- resumo_geral()
-      validate(need(!is.null(df), "Resumo geral ainda não foi gerado. Rode o script 04_analysis.R ou a pipeline completa."))
+      validate(need(!is.null(df), "Resumo geral ainda nao foi gerado. Rode o script 04_analysis.R ou a pipeline completa."))
       datatable(
         df,
         rownames = FALSE,
@@ -87,7 +108,7 @@ mod_relatorios_server <- function(id, dados_est) {
 
     output$plot_indice_mensal <- renderPlotly({
       df <- indice_mensal()
-      validate(need(!is.null(df), "Índice de letalidade mensal ainda não foi gerado."))
+      validate(need(!is.null(df), "Indice de letalidade mensal ainda nao foi gerado."))
 
       p <- ggplot(df, aes(x = mes_ano, y = indice_letal)) +
         geom_line(color = "#e74c3c", size = 1) +
@@ -102,9 +123,9 @@ mod_relatorios_server <- function(id, dados_est) {
         scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
         theme_minimal() +
         labs(
-          title = "Índice de letalidade (mensal)",
-          x = "Mês/ano",
-          y = "Índice"
+          title = "Indice de letalidade (mensal)",
+          x = "Mes/ano",
+          y = "Indice"
         )
 
       plotly::ggplotly(p)
@@ -112,7 +133,7 @@ mod_relatorios_server <- function(id, dados_est) {
 
     output$tbl_anomalias <- renderDT({
       df <- anomalias()
-      validate(need(!is.null(df), "Arquivo de anomalias ainda não foi gerado."))
+      validate(need(!is.null(df), "Arquivo de anomalias ainda nao foi gerado."))
       datatable(
         df,
         rownames = FALSE,
@@ -125,6 +146,20 @@ mod_relatorios_server <- function(id, dados_est) {
         )
       )
     })
+    output$tbl_duplicados <- renderDT({
+      df <- duplicados()
+      validate(need(!is.null(df), "Relatório de duplicados ainda não foi gerado. Rode a pipeline completa."))
+      datatable(
+        df,
+        rownames = FALSE,
+        extensions = "Buttons",
+        options = list(
+          dom = "Bfrtip",
+          buttons = c("copy", "csv"),
+          pageLength = 15,
+          scrollX = TRUE
+        )
+      )
+    })
   })
 }
-

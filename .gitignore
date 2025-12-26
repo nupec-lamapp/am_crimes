@@ -1,4 +1,4 @@
-# R
+# R / RStudio
 .Rproj.user/
 .Rhistory
 .RData
@@ -14,27 +14,27 @@
 .quarto/
 _quarto.yml.lock
 
-# Renv
+# renv
 renv/library/
 renv/staging/
 renv/python/
 renv/local/
 
-# Dados
+# Dados (gerados)
 data/raw/
 data/exports/
-# Mantém data/processed/ com arquivos essenciais (commitados manualmente)
+data/
+!data/processed/.gitkeep
+# Mantem data/processed/ apenas para arquivos essenciais ja versionados
 
 # Logs
-logs/*.log
-logs/*.csv
-# Mantém estrutura de logs/, mas ignora conteúdo
+logs/
+!logs/.gitkeep
+# Mantem estrutura de logs/ vazia, mas ignora conteudo
 
 # Outputs gerados
-outputs/*.csv
-outputs/*.png
-outputs/figs/
-outputs/eval/
+outputs/
+!outputs/.gitkeep
 # Arquivos gerados automaticamente pelo pipeline
 
 # Deploy (rsconnect)
@@ -47,9 +47,8 @@ desktop.ini
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-.git\refs\heads\desktop.ini
 
-# Arquivos temporários
+# Arquivos temporarios
 *.tmp
 *.bak
 *.swp
@@ -71,3 +70,14 @@ env/
 *.Rbackup
 *_backup.*
 
+# Seguranca - Credenciais e tokens
+configurar_rsconnect.R
+*.key
+*.pem
+*.p12
+.env
+.env.local
+secrets/
+credentials/
+.Rproj.user
+.quarto

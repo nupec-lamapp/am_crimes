@@ -7,6 +7,7 @@
 suppressPackageStartupMessages({
   library(glue)
   library(lubridate)
+  library(stringi)
 })
 
 DIR_LOGS <- "logs"
@@ -41,4 +42,13 @@ normalize_encoding <- function(x) {
 parse_date_safe <- function(x, orders = c("Y-m-d", "d/m/Y")) {
   out <- suppressWarnings(lubridate::parse_date_time(x, orders = orders, tz = "America/Manaus"))
   as.Date(out)
+}
+
+normalizar_titulo <- function(x) {
+  if (is.null(x)) return(NA_character_)
+  x <- tolower(as.character(x))
+  x <- stringi::stri_trans_general(x, "Latin-ASCII")
+  x <- gsub("[^a-z0-9 ]", " ", x)
+  x <- gsub("\\s+", " ", x)
+  trimws(x)
 }
