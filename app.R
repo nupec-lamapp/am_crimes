@@ -65,6 +65,28 @@ ui <- fluidPage(
       ),
       fluidRow(
         column(
+          width = 12,
+          div(
+            class = "card-panel",
+            h5("Contexto Institucional"),
+            p("O Laboratório de Monitoramento e Avaliação de Políticas Públicas (LAMAPP) agrega ciência de dados aplicada, inteligência artificial e pesquisa operacional com foco em evidências para a gestão pública amazônica. Seu portfólio inclui monitoramento territorial, dashboards de políticas públicas e formação de equipes multidisciplinares, conforme descrito em ", a(href = "https://lamapp-tec.vercel.app/", "lamapp-tec.vercel.app"), "."),
+            p("O Núcleo de Pesquisa em Ciência de Dados e Otimização (NuPeC) da UFAM complementa o trabalho com modelos de otimização, logística e métodos quantitativos voltados para a resolução de problemas complexos na Amazônia e na formação de recursos humanos, apoiado pelo Instituto de Ciências Exatas e Tecnologia (ICET). Veja as iniciativas em ", a(href = "https://www.nupec.ufam.edu.br/", "nupec.ufam.edu.br"), ".")
+          )
+        )
+      ),
+      fluidRow(
+        column(
+          width = 12,
+          div(
+            class = "card-panel",
+            h6("LAMAPP & NuPeC"),
+            p("Ambos os centros estão sediados na UFAM/ICET e operam com programas de pesquisa, extensão e parcerias com órgãos públicos, fortalecendo integrações entre ciência de dados, políticas e impacto social."),
+            p(tags$b("Equipe acadêmica:"), "Hidelbrando Ferreira Rodrigues e Luiz Antônio Nascimento de Souza são doutores, com experiência em estatística aplicada, políticas públicas e gestão de conflitos territoriais, respectivamente; Thiago dos Santos Mendonça e Gisele Pena da Silva trazem contribuições técnicas em engenharia de software e engenharia de produção para o projeto.")
+          )
+        )
+      ),
+      fluidRow(
+        column(
           width = 8,
           div(
             class = "card-panel",
@@ -77,6 +99,22 @@ ui <- fluidPage(
             class = "card-panel",
             h4("Executar pipeline (admin)"),
             mod_controle_pipeline_ui("pipeline")
+          )
+        )
+      ),
+      fluidRow(
+        column(
+          width = 12,
+          div(
+            class = "card-panel",
+            h5("Equipe e parcerias"),
+            tags$ul(
+              tags$li("Hidelbrando Ferreira Rodrigues"),
+              tags$li("Thiago dos Santos Mendonça"),
+              tags$li("Gisele Pena da Silva"),
+              tags$li("Luiz Antônio Nascimento de Souza (docente)")
+            ),
+            p("Uma iniciativa coordenada pelo LAMAPP / NuPeC com apoio institucional da UFAM e do ICET.")
           )
         )
       )
@@ -118,3 +156,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
+
