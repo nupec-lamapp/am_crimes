@@ -2,9 +2,8 @@
 
 # Dados e processamento
 data/raw/
-data/processed/*.csv
+data/exports/
 logs/
-outputs/*.csv
 outputs/*.png
 outputs/figs/
 outputs/eval/
@@ -21,7 +20,6 @@ testthat.R
 # Renv (bibliotecas locais)
 renv/library/
 renv/staging/
-renv/activate.R
 
 # Arquivos de desenvolvimento
 .Rproj.user
@@ -58,3 +56,5 @@ relat.R
 05_boletim_crimes.Rmd
 
 
+05_boletim_crimes.html
+revisaoES.html
