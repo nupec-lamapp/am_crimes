@@ -11,6 +11,7 @@ MONTH_SELECT_CHOICES <- c(
   "Todos" = "todos",
   setNames(sprintf("%02d", seq_along(MES_PT)), sprintf("%02d - %s", seq_along(MES_PT), MES_PT))
 )
+ANO_MINIMO <- 2025
 
 mod_controle_coleta_ui <- function(id) {
   ns <- NS(id)
@@ -199,6 +200,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       list(
         mes_info = month_info,
         year_span = sort(unique(month_info$ano)),
+        year_domain = seq(ANO_MINIMO, lubridate::year(fim)),
         portal = portal_missing,
         portal_years = setNames(portal_years$years, portal_years$portal),
         inicio = min(month_info$inicio),
@@ -209,11 +211,12 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     observeEvent(lacunas_cache(), {
       cache <- lacunas_cache()
       if (is.null(cache)) return()
-      ano_choices <- as.character(cache$year_span)
+      ano_choices <- as.character(cache$year_domain)
+      default_year <- if (length(cache$year_span) > 0) max(cache$year_span) else max(cache$year_domain)
       updateSelectInput(
         session, "ano_lacunas",
         choices = ano_choices,
-        selected = if (length(ano_choices) > 0) tail(ano_choices, 1) else NULL
+        selected = if (!is.infinite(default_year)) as.character(default_year) else tail(ano_choices, 1)
       )
       updateSelectInput(
         session, "mes_lacunas",
