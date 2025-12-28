@@ -128,44 +128,47 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         dplyr::arrange(dplyr::desc(registros))
     }, rownames = FALSE)
 
-    calc_lacunas_mensais <- function(df, portal, inicio = as.Date("2025-01-01"), fim = Sys.Date()) {
-      inicio <- lubridate::floor_date(as.Date(inicio), "month")
-      fim <- min(as.Date(fim), Sys.Date())
-      if (inicio > fim) {
-        return(list(meses = integer(0), faltantes = list(), inicio = inicio, fim = fim))
+    lacunas_cache <- reactive({
+      df <- dados_enr()
+      if (is.null(df) || nrow(df) == 0) {
+        return(NULL)
       }
 
-      meses <- seq(inicio, lubridate::floor_date(fim, "month"), by = "month")
+      inicio <- as.Date("2025-01-01")
+      fim <- Sys.Date()
+      meses <- seq(lubridate::floor_date(inicio, "month"), lubridate::floor_date(fim, "month"), by = "month")
+      if (length(meses) == 0) {
+        return(NULL)
+      }
 
-      df_p <- df %>%
-        dplyr::mutate(data_pub = as.Date(data_pub)) %>%
-        dplyr::filter(
-          .data$portal == portal,
-          !is.na(.data$data_pub),
-          .data$data_pub >= inicio,
-          .data$data_pub <= fim
-        )
-
-      presentes <- unique(df_p$data_pub)
-
-      faltantes <- lapply(meses, function(mes) {
+      month_ranges <- lapply(meses, function(mes) {
         primeiro_dia <- mes
         ultimo_dia <- min(lubridate::ceiling_date(mes, "month") - 1, fim)
-        dias_mes <- seq(primeiro_dia, ultimo_dia, by = "day")
-        sort(setdiff(dias_mes, presentes))
+        seq(primeiro_dia, ultimo_dia, by = "day")
       })
+
+      df_proc <- df %>%
+        dplyr::mutate(data_pub = as.Date(data_publicacao)) %>%
+        dplyr::filter(!is.na(data_pub), data_pub >= inicio, data_pub <= fim)
+
+      portais <- sort(unique(na.omit(df_proc$portal)))
+      portal_missing <- lapply(portais, function(portal) {
+        presentes <- unique(df_proc$data_pub[df_proc$portal == portal])
+        lapply(month_ranges, function(dias) sort(setdiff(dias, presentes)))
+      })
+      names(portal_missing) <- portais
 
       list(
         meses = meses,
-        faltantes = faltantes,
         inicio = inicio,
-        fim = fim
+        fim = fim,
+        portal = portal_missing
       )
-    }
+    })
 
     output$lacunas_info <- renderUI({
-      df <- dados_enr()
-      if (is.null(df) || nrow(df) == 0) {
+      cache <- lacunas_cache()
+      if (is.null(cache)) {
         return(tags$div(class = "text-muted", "Sem dados carregados."))
       }
       portal_sel <- input$portal_lacunas
@@ -173,24 +176,27 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         return(tags$div(class = "text-muted", "Selecione um portal para ver as lacunas."))
       }
 
-      lacunas <- calc_lacunas_mensais(df, portal_sel)
-      if (length(lacunas$meses) == 0) {
-        return(tags$div(class = "text-danger", "Não foi possível calcular lacunas para o intervalo atual."))
+      faltantes <- cache$portal[[portal_sel]]
+      if (is.null(faltantes)) {
+        return(tags$div(
+          class = "text-warning",
+          sprintf("Ainda não há registros para %s entre %s e %s.", portal_sel, format(cache$inicio, "%d/%m/%Y"), format(cache$fim, "%d/%m/%Y"))
+        ))
       }
 
       tags$div(
         tags$p(
           class = "text-muted",
           sprintf("Intervalo considerado: %s a %s",
-                  format(lacunas$inicio, "%d/%m/%Y"),
-                  format(lacunas$fim, "%d/%m/%Y"))
+                  format(cache$inicio, "%d/%m/%Y"),
+                  format(cache$fim, "%d/%m/%Y"))
         ),
         tags$div(
           class = "lacunas-grid",
           style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
-          lapply(seq_along(lacunas$meses), function(i) {
-            mes <- lacunas$meses[i]
-            dias <- lacunas$faltantes[[i]]
+          lapply(seq_along(cache$meses), function(i) {
+            mes <- cache$meses[i]
+            dias <- faltantes[[i]]
             dias_lista <- if (length(dias) == 0) {
               tags$span(class = "text-success", "Sem lacunas")
             } else {
