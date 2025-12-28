@@ -11,7 +11,7 @@ MONTH_SELECT_CHOICES <- c(
   "Todos" = "todos",
   setNames(sprintf("%02d", seq_along(MES_PT)), sprintf("%02d - %s", seq_along(MES_PT), MES_PT))
 )
-ANO_MINIMO <- 2025
+ANO_MINIMO <- 2000
 
 mod_controle_coleta_ui <- function(id) {
   ns <- NS(id)
