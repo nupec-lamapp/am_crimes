@@ -21,7 +21,7 @@ git config user.email "seu.email@exemplo.com"
 git remote add origin https://github.com/USUARIO/crimes_am.git
 ```
 
-## Versionamento da Versão 0.0.6
+## Versionamento da Versão 0.0.7
 
 ### Opção 1: Usar script de versionamento
 
@@ -59,24 +59,24 @@ git add INSTRUCOES_GIT.md
 #### 3. Criar commit
 
 ```bash
-git commit -m "v0.0.6: template RBSP, créditos e documentação científica
+git commit -m "v0.0.7: Lacunas mensais no painel de coleta e ajustes de deploy
 
-- Template alinhado à Revista Brasileira de Segurança Pública
-- Créditos oficiais no dashboard e bibliografia ABNT
-- Atualização do changelog e guias de versão"
+- Reorganiza a aba "Lacunas por portal" mostrando meses desde jan/2025 e os dias faltantes
+- Inclui arquivos essenciais no bundle e atenções de deploy
+- Atualiza metadados e documentação para 0.0.7"
 ```
 
 #### 4. Criar tag
 
 ```bash
-git tag -a v0.0.6 -m "Versão 0.0.6 - template RBSP e créditos oficiais"
+git tag -a v0.0.7 -m "Versão 0.0.7 - lacunas mensais e ajustes de deploy"
 ```
 
 #### 5. Enviar para o GitHub
 
 ```bash
 git push origin develop
-git push origin v0.0.6
+git push origin v0.0.7
 git push origin --tags
 ```
 
@@ -84,15 +84,15 @@ git push origin --tags
 
 ```bash
 git tag
-git show v0.0.6
+git show v0.0.7
 ```
 
 ## Criar release no GitHub
 
 1. Acesse o repositório e vá em **Releases > Create a new release**
-2. Escolha a tag `v0.0.6`
-3. Use o título `v0.0.6 - template RBSP e créditos oficiais`
-4. Copie o conteúdo da seção `[0.0.6]` do `CHANGELOG.md`
+2. Escolha a tag `v0.0.7`
+3. Use o título `v0.0.7 - lacunas mensais e ajustes de deploy`
+4. Copie o conteúdo da seção `[0.0.7]` do `CHANGELOG.md`
 5. Clique em **Publish release**
 
 ## Estrutura de commits

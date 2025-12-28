@@ -2,6 +2,13 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [0.0.7] - 2025-12-28
+
+### Adicionado
+- Painel de "Lacunas por portal" reorganizado para exibir todos os meses desde janeiro de 2025 e os dias que ainda faltam coletar.
+### Atualizado
+- Metadados e documentação de versionamento ajustados para a nova release.
+
 ## [0.0.1] - 2025-01-XX
 
 ### Adicionado

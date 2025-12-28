@@ -44,8 +44,7 @@ mod_controle_coleta_ui <- function(id) {
         class = "card-panel",
         h4("Lacunas por portal"),
         selectInput(ns("portal_lacunas"), "Portal:", choices = "Selecione", width = "50%"),
-        dateRangeInput(ns("range_lacunas"), "Intervalo para checar lacunas:", start = Sys.Date() - 30, end = Sys.Date(), format = "dd/mm/yyyy", language = "pt-BR"),
-        actionButton(ns("btn_check_lacunas"), "Checar lacunas", class = "btn btn-outline-secondary btn-sm"),
+        tags$small("Selecionar um portal para ver todos os meses desde janeiro de 2025 e os dias que ainda não foram coletados."),
         htmlOutput(ns("lacunas_info"))
       ),
       div(
@@ -129,58 +128,89 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         dplyr::arrange(dplyr::desc(registros))
     }, rownames = FALSE)
 
-    calc_lacunas <- function(df, portal, d1, d2) {
-      # Garante que datas estejam no formato Date antes de comparar
-      d1 <- as.Date(d1)
-      d2 <- as.Date(d2)
+    calc_lacunas_mensais <- function(df, portal, inicio = as.Date("2025-01-01"), fim = Sys.Date()) {
+      inicio <- lubridate::floor_date(as.Date(inicio), "month")
+      fim <- min(as.Date(fim), Sys.Date())
+      if (inicio > fim) {
+        return(list(meses = integer(0), faltantes = list(), inicio = inicio, fim = fim))
+      }
+
+      meses <- seq(inicio, lubridate::floor_date(fim, "month"), by = "month")
 
       df_p <- df %>%
         dplyr::mutate(data_pub = as.Date(data_pub)) %>%
-        dplyr::filter(.data$portal == portal, !is.na(data_pub))
+        dplyr::filter(
+          .data$portal == portal,
+          !is.na(.data$data_pub),
+          .data$data_pub >= inicio,
+          .data$data_pub <= fim
+        )
 
-      seq_datas <- seq(from = d1, to = d2, by = "day")
       presentes <- unique(df_p$data_pub)
-      setdiff(seq_datas, presentes)
+
+      faltantes <- lapply(meses, function(mes) {
+        primeiro_dia <- mes
+        ultimo_dia <- min(lubridate::ceiling_date(mes, "month") - 1, fim)
+        dias_mes <- seq(primeiro_dia, ultimo_dia, by = "day")
+        sort(setdiff(dias_mes, presentes))
+      })
+
+      list(
+        meses = meses,
+        faltantes = faltantes,
+        inicio = inicio,
+        fim = fim
+      )
     }
 
-    observeEvent(input$btn_check_lacunas, {
+    output$lacunas_info <- renderUI({
       df <- dados_enr()
-      portal_sel <- input$portal_lacunas
-      rng <- input$range_lacunas
       if (is.null(df) || nrow(df) == 0) {
-        output$lacunas_info <- renderUI(tags$div(class = "text-muted", "Sem dados carregados."))
-        return()
+        return(tags$div(class = "text-muted", "Sem dados carregados."))
       }
+      portal_sel <- input$portal_lacunas
       if (is.null(portal_sel) || portal_sel == "Selecione") {
-        output$lacunas_info <- renderUI(tags$div(class = "text-muted", "Selecione um portal para checar lacunas."))
-        return()
+        return(tags$div(class = "text-muted", "Selecione um portal para ver as lacunas."))
       }
-      if (is.null(rng) || any(is.na(rng))) {
-        output$lacunas_info <- renderUI(tags$div(class = "text-danger", "Intervalo invalido."))
-        return()
+
+      lacunas <- calc_lacunas_mensais(df, portal_sel)
+      if (length(lacunas$meses) == 0) {
+        return(tags$div(class = "text-danger", "Não foi possível calcular lacunas para o intervalo atual."))
       }
-      d1 <- as.Date(rng[1]); d2 <- as.Date(rng[2])
-      if (d1 > d2) {
-        output$lacunas_info <- renderUI(tags$div(class = "text-danger", "Data inicial maior que final."))
-        return()
-      }
-      lac <- calc_lacunas(df, portal_sel, d1, d2)
-      if (length(lac) == 0) {
-        output$lacunas_info <- renderUI(tags$div(
-          class = "text-success",
-          sprintf("Sem lacunas para %s entre %s e %s.", portal_sel, format(d1, "%d/%m/%Y"), format(d2, "%d/%m/%Y"))
-        ))
-      } else {
-        lac_dates <- as.Date(lac)
-        lac_fmt <- format(sort(lac_dates), "%d/%m/%Y")
-        output$lacunas_info <- renderUI(tags$div(
-          tags$strong(sprintf("Lacunas (%s dias) para %s:", length(lac_fmt), portal_sel)),
-          tags$ul(
-            class = "lacunas-list",
-            lapply(lac_fmt, function(d) tags$li(d))
-          )
-        ))
-      }
+
+      tags$div(
+        tags$p(
+          class = "text-muted",
+          sprintf("Intervalo considerado: %s a %s",
+                  format(lacunas$inicio, "%d/%m/%Y"),
+                  format(lacunas$fim, "%d/%m/%Y"))
+        ),
+        tags$div(
+          class = "lacunas-grid",
+          style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
+          lapply(seq_along(lacunas$meses), function(i) {
+            mes <- lacunas$meses[i]
+            dias <- lacunas$faltantes[[i]]
+            dias_lista <- if (length(dias) == 0) {
+              tags$span(class = "text-success", "Sem lacunas")
+            } else {
+              tags$div(
+                class = "lacunas-days",
+                paste(format(dias, "%d"), collapse = ", ")
+              )
+            }
+            tags$div(
+              class = "lacunas-card",
+              tags$strong(format(mes, "%B %Y")),
+              tags$p(
+                class = "text-secondary mb-1",
+                if (length(dias) == 0) "Dias completos" else sprintf("%s dias faltando", length(dias))
+              ),
+              dias_lista
+            )
+          })
+        )
+      )
     })
 
     log_txt <- reactiveVal("Aguardando execucao.")
