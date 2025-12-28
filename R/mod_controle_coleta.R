@@ -3,6 +3,15 @@
 # Painel interativo para acionar raspagem e pipeline
 ############################################################
 
+MES_PT <- c(
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+)
+MONTH_SELECT_CHOICES <- c(
+  "Todos" = "todos",
+  setNames(sprintf("%02d", seq_along(MES_PT)), sprintf("%02d - %s", seq_along(MES_PT), MES_PT))
+)
+
 mod_controle_coleta_ui <- function(id) {
   ns <- NS(id)
 
@@ -44,7 +53,17 @@ mod_controle_coleta_ui <- function(id) {
         class = "card-panel",
         h4("Lacunas por portal"),
         selectInput(ns("portal_lacunas"), "Portal:", choices = "Selecione", width = "50%"),
-        tags$small("Selecionar um portal para ver todos os meses desde janeiro de 2025 e os dias que ainda não foram coletados."),
+        fluidRow(
+          column(
+            width = 6,
+            selectInput(ns("ano_lacunas"), "Ano:", choices = NULL, width = "100%")
+          ),
+          column(
+            width = 6,
+            selectInput(ns("mes_lacunas"), "Mês:", choices = MONTH_SELECT_CHOICES, width = "100%")
+          )
+        ),
+        tags$small("Selecionar um portal para ver todos os meses desde janeiro de 2025, escolher o ano e o mês (ou todos os meses do ano) para exibir as lacunas."),
         htmlOutput(ns("lacunas_info"))
       ),
       div(
@@ -136,35 +155,83 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       inicio <- as.Date("2025-01-01")
       fim <- Sys.Date()
-      meses <- seq(lubridate::floor_date(inicio, "month"), lubridate::floor_date(fim, "month"), by = "month")
-      if (length(meses) == 0) {
+      if (inicio > fim) return(NULL)
+
+      months_seq <- seq(lubridate::floor_date(inicio, "month"), lubridate::floor_date(fim, "month"), by = "month")
+      if (length(months_seq) == 0) {
         return(NULL)
       }
 
-      month_ranges <- lapply(meses, function(mes) {
-        primeiro_dia <- mes
-        ultimo_dia <- min(lubridate::ceiling_date(mes, "month") - 1, fim)
-        seq(primeiro_dia, ultimo_dia, by = "day")
-      })
+      anos <- lubridate::year(months_seq)
+      meses_num <- lubridate::month(months_seq)
+      month_info <- tibble::tibble(
+        mes = months_seq,
+        ano = anos,
+        mes_num = meses_num,
+        mes_label = sprintf("%s %d", MES_PT[meses_num], anos),
+        inicio = months_seq,
+        fim = pmin(lubridate::ceiling_date(months_seq, "month") - 1, fim)
+      )
 
       df_proc <- df %>%
         dplyr::mutate(data_pub = as.Date(data_publicacao)) %>%
         dplyr::filter(!is.na(data_pub), data_pub >= inicio, data_pub <= fim)
 
-      portais <- sort(unique(na.omit(df_proc$portal)))
-      portal_missing <- lapply(portais, function(portal) {
+      if (nrow(df_proc) == 0) {
+        return(NULL)
+      }
+
+      portal_list <- sort(unique(df_proc$portal))
+      portal_missing <- lapply(portal_list, function(portal) {
         presentes <- unique(df_proc$data_pub[df_proc$portal == portal])
-        lapply(month_ranges, function(dias) sort(setdiff(dias, presentes)))
+        faltantes <- mapply(function(primeiro, ultimo) {
+          dias_mes <- seq(primeiro, ultimo, by = "day")
+          sort(setdiff(dias_mes, presentes))
+        }, month_info$inicio, month_info$fim, SIMPLIFY = FALSE)
+        month_info %>% dplyr::mutate(faltantes = faltantes)
       })
-      names(portal_missing) <- portais
+      names(portal_missing) <- portal_list
+
+      portal_years <- df_proc %>%
+        dplyr::group_by(portal) %>%
+        dplyr::summarise(years = list(sort(unique(lubridate::year(data_pub)))), .groups = "drop")
 
       list(
-        meses = meses,
-        inicio = inicio,
-        fim = fim,
-        portal = portal_missing
+        mes_info = month_info,
+        year_span = sort(unique(month_info$ano)),
+        portal = portal_missing,
+        portal_years = setNames(portal_years$years, portal_years$portal),
+        inicio = min(month_info$inicio),
+        fim = max(month_info$fim)
       )
     })
+
+    observeEvent(lacunas_cache(), {
+      cache <- lacunas_cache()
+      if (is.null(cache)) return()
+      ano_choices <- as.character(cache$year_span)
+      updateSelectInput(
+        session, "ano_lacunas",
+        choices = ano_choices,
+        selected = if (length(ano_choices) > 0) tail(ano_choices, 1) else NULL
+      )
+      updateSelectInput(
+        session, "mes_lacunas",
+        choices = MONTH_SELECT_CHOICES,
+        selected = "todos"
+      )
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$portal_lacunas, {
+      cache <- lacunas_cache()
+      if (is.null(cache)) return()
+      portal_sel <- input$portal_lacunas
+      years <- cache$portal_years[[portal_sel]]
+      if (!is.null(years) && length(years) > 0) {
+        updateSelectInput(session, "ano_lacunas", selected = as.character(max(years)))
+      }
+      updateSelectInput(session, "mes_lacunas", selected = "todos")
+    }, ignoreNULL = TRUE)
 
     output$lacunas_info <- renderUI({
       cache <- lacunas_cache()
@@ -176,11 +243,32 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         return(tags$div(class = "text-muted", "Selecione um portal para ver as lacunas."))
       }
 
-      faltantes <- cache$portal[[portal_sel]]
-      if (is.null(faltantes)) {
+      portal_tbl <- cache$portal[[portal_sel]]
+      if (is.null(portal_tbl) || nrow(portal_tbl) == 0) {
         return(tags$div(
           class = "text-warning",
-          sprintf("Ainda não há registros para %s entre %s e %s.", portal_sel, format(cache$inicio, "%d/%m/%Y"), format(cache$fim, "%d/%m/%Y"))
+          sprintf("Portal %s ainda não possui registros no intervalo carregado.", portal_sel)
+        ))
+      }
+
+      ano_sel <- suppressWarnings(as.integer(input$ano_lacunas))
+      if (is.na(ano_sel) || !(ano_sel %in% cache$year_span)) {
+        ano_sel <- tail(cache$year_span, 1)
+      }
+
+      meses <- portal_tbl %>% dplyr::filter(ano == ano_sel)
+      mes_sel <- input$mes_lacunas
+      if (!is.null(mes_sel) && mes_sel != "todos") {
+        mes_value <- suppressWarnings(as.integer(mes_sel))
+        if (!is.na(mes_value)) {
+          meses <- meses %>% dplyr::filter(mes_num == mes_value)
+        }
+      }
+
+      if (nrow(meses) == 0) {
+        return(tags$div(
+          class = "text-muted",
+          "Nenhum mês disponível para o ano selecionado."
         ))
       }
 
@@ -194,9 +282,9 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         tags$div(
           class = "lacunas-grid",
           style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
-          lapply(seq_along(cache$meses), function(i) {
-            mes <- cache$meses[i]
-            dias <- faltantes[[i]]
+          lapply(seq_len(nrow(meses)), function(i) {
+            row <- meses[i, ]
+            dias <- row$faltantes[[1]]
             dias_lista <- if (length(dias) == 0) {
               tags$span(class = "text-success", "Sem lacunas")
             } else {
@@ -207,7 +295,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
             }
             tags$div(
               class = "lacunas-card",
-              tags$strong(format(mes, "%B %Y")),
+              tags$strong(row$mes_label),
               tags$p(
                 class = "text-secondary mb-1",
                 if (length(dias) == 0) "Dias completos" else sprintf("%s dias faltando", length(dias))
