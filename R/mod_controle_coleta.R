@@ -48,6 +48,11 @@ mod_controle_coleta_ui <- function(id) {
       div(
         class = "card-panel",
         h4("Cobertura por portal (dados carregados)"),
+        div(
+          class = "status-summary",
+          textOutput(ns("controle_info")),
+          textOutput(ns("controle_periodo"))
+        ),
         tableOutput(ns("tab_resumo_portal"))
       ),
       div(
@@ -81,7 +86,20 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     ns <- session$ns
 
     portais_status <- reactiveVal("")
+    status_summary <- reactiveVal("Pronto para iniciar coleta.")
+    coleta_timestamp <- reactiveVal(NULL)
+
     output$portais_status <- renderText(portais_status())
+    output$controle_info <- renderText(status_summary())
+    output$controle_periodo <- renderText({
+      rng <- input$range
+      if (is.null(rng) || any(is.na(rng))) {
+        return("")
+      }
+      start <- as.Date(rng[1])
+      end <- as.Date(rng[2])
+      sprintf("Período selecionado: %s a %s", format(start, "%d/%m/%Y"), format(end, "%d/%m/%Y"))
+    })
 
     listar_portais_seguro <- function() {
       portais_status("")
@@ -140,11 +158,17 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         dplyr::filter(!is.na(data_pub)) %>%
         dplyr::group_by(portal) %>%
         dplyr::summarise(
-          inicio = format(min(data_pub, na.rm = TRUE), "%d/%m/%Y"),
-          fim    = format(max(data_pub, na.rm = TRUE), "%d/%m/%Y"),
+          inicio = min(data_pub, na.rm = TRUE),
+          fim    = max(data_pub, na.rm = TRUE),
           registros = dplyr::n(),
+          dias_unicos = dplyr::n_distinct(data_pub),
           .groups = "drop"
         ) %>%
+        dplyr::mutate(
+          periodo = sprintf("%s - %s", format(inicio, "%d/%m/%Y"), format(fim, "%d/%m/%Y")),
+          ultima_coleta = format(fim, "%d/%m/%Y")
+        ) %>%
+        dplyr::select(portal, periodo, ultima_coleta, registros, dias_unicos) %>%
         dplyr::arrange(dplyr::desc(registros))
     }, rownames = FALSE)
 
@@ -282,6 +306,11 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
                   format(cache$inicio, "%d/%m/%Y"),
                   format(cache$fim, "%d/%m/%Y"))
         ),
+        if (!is.null(coleta_timestamp())) {
+          tags$p(class = "text-success", sprintf("Última atualização: %s", format(coleta_timestamp(), "%d/%m/%Y %H:%M:%S")))
+        } else {
+          NULL
+        },
         tags$div(
           class = "lacunas-grid",
           style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
@@ -337,6 +366,10 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       }
 
       log_txt("Iniciando execucao...")
+      status_summary(sprintf("Coleta em andamento (%s a %s) para portais: %s",
+                             format(d1, "%d/%m/%Y"),
+                             format(d2, "%d/%m/%Y"),
+                             if (is.null(portais_sel)) "Todos" else paste(portais_sel, collapse = ", ")))
 
       ok <- TRUE
       withProgress(message = "Executando coleta", value = 0, {
@@ -390,6 +423,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           ok <<- FALSE
           log_txt("Execucao interrompida pelo usuario apos scraping. Dados coletados foram mantidos.")
           showNotification("Execucao interrompida apos scraping. Dados brutos mantidos.", type = "warning")
+          status_summary("Coleta interrompida pelo usuário; os dados brutos foram mantidos.")
           return()
         }
 
@@ -417,8 +451,11 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       dados_enr(carregar_principal())
       dados_est(carregar_estaticos())
+      coleta_timestamp(Sys.time())
       log_txt("Execucao finalizada com sucesso.")
-      showNotification("Coleta finalizada.", type = "message")
+      status_summary(sprintf("Coleta concluida em %s; lacunas e cobertura atualizadas.",
+                             format(coleta_timestamp(), "%d/%m/%Y %H:%M:%S")))
+      showNotification("Coleta finalizada e lacunas recalculadas.", type = "message")
     })
   })
 }
