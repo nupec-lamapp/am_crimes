@@ -55,11 +55,17 @@ ui <- fluidPage(
             class = "card-panel logos-panel",
             div(
               class = "logos-row",
-              tags$img(src = "logo_lamapp.jpg", class = "logo-parceiro", alt = "LAMAPP"),
-              tags$img(src = "logo_nupec.jpg", class = "logo-parceiro", alt = "NuPeC"),
-              tags$img(src = "Logo_UFAM.png", class = "logo-parceiro", alt = "UFAM"),
-              tags$img(src = "Logomarca ICET sem fundo PNG P.png", class = "logo-parceiro", alt = "ICET"),
-              tags$img(src = "logo_tropa_dos_amigos.png", class = "logo-parceiro", alt = "Tropa dos Amigos")
+              style = "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;",
+              div(
+                style = "display:flex; align-items:center; flex-wrap:wrap; gap:12px;",
+                tags$img(src = "logo_lamapp.jpg", class = "logo-parceiro", alt = "LAMAPP"),
+                tags$img(src = "logo_nupec.jpg", class = "logo-parceiro", alt = "NuPeC")
+              ),
+              div(
+                style = "display:flex; align-items:center; flex-wrap:wrap; gap:12px;",
+                tags$img(src = "Logo_UFAM.png", class = "logo-parceiro", alt = "UFAM"),
+                tags$img(src = "Logomarca ICET sem fundo PNG P.png", class = "logo-parceiro", alt = "ICET")
+              )
             )
           )
         )
