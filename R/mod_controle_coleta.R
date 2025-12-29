@@ -29,6 +29,7 @@ mod_controle_coleta_ui <- function(id) {
         h4("Coleta de portais"),
         actionButton(ns("btn_refresh_portais"), "Atualizar lista de portais", class = "btn btn-secondary btn-sm"),
         textOutput(ns("portais_status")),
+        uiOutput(ns("storage_info")),
         selectInput(ns("portais"), "Portais:", choices = "Todos", multiple = TRUE),
         dateRangeInput(
           ns("range"),
@@ -113,6 +114,41 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     set_status_details("idle", "Pronto para iniciar coleta.", NULL)
 
     output$portais_status <- renderText(portais_status())
+    output$storage_info <- renderUI({
+      workdir <- if (exists("CRIMES_AM_WORKDIR", inherits = TRUE)) {
+        get("CRIMES_AM_WORKDIR", inherits = TRUE)
+      } else {
+        NA_character_
+      }
+      mode <- if (exists("CRIMES_AM_STORAGE_MODE", inherits = TRUE)) {
+        get("CRIMES_AM_STORAGE_MODE", inherits = TRUE)
+      } else {
+        "unknown"
+      }
+      source <- if (exists("CRIMES_AM_WORKDIR_SOURCE", inherits = TRUE)) {
+        get("CRIMES_AM_WORKDIR_SOURCE", inherits = TRUE)
+      } else {
+        "unknown"
+      }
+      if (identical(mode, "temp")) {
+        tags$div(
+          class = "text-danger",
+          "Armazenamento temporario: dados coletados serao perdidos ao reiniciar.",
+          tags$br(),
+          if (!is.na(workdir) && nzchar(workdir)) {
+            sprintf("Workdir atual: %s", workdir)
+          } else {
+            NULL
+          },
+          tags$br(),
+          "Defina CRIMES_AM_WORKDIR para um caminho persistente."
+        )
+      } else if (!is.na(workdir) && nzchar(workdir)) {
+        tags$small(class = "text-muted", sprintf("Armazenamento: %s (%s)", workdir, source))
+      } else {
+        NULL
+      }
+    })
     output$controle_info <- renderText(status_summary())
     output$controle_periodo <- renderText({
       rng <- input$range

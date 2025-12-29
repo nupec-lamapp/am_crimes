@@ -136,6 +136,50 @@ server <- function(input, output, session) {
   dados_enr <- reactiveVal(carregar_principal())
   dados_est <- reactiveVal(carregar_estaticos())
 
+  stamp_arquivo <- function(path) {
+    if (is.null(path) || !file.exists(path)) return("missing")
+    info <- file.info(path)
+    paste(path, info$mtime, info$size, sep = "|")
+  }
+
+  dados_enr_poll <- reactivePoll(
+    intervalMillis = 5000,
+    session = session,
+    checkFunc = function() {
+      stamp_arquivo(localizar_arquivo(DIR_PROCESSED, "crimes_classificados.csv"))
+    },
+    valueFunc = function() {
+      carregar_principal()
+    }
+  )
+
+  observeEvent(dados_enr_poll(), {
+    dados_enr(dados_enr_poll())
+  }, ignoreInit = TRUE)
+
+  dados_est_poll <- reactivePoll(
+    intervalMillis = 5000,
+    session = session,
+    checkFunc = function() {
+      arquivos <- c(
+        "04_resumo_geral.csv",
+        "04_indice_letal_mensal.csv",
+        "04_anomalias_classificacao.csv"
+      )
+      stamps <- vapply(arquivos, function(nome) {
+        stamp_arquivo(localizar_arquivo(DIR_OUTPUTS, nome))
+      }, character(1))
+      paste(stamps, collapse = "||")
+    },
+    valueFunc = function() {
+      carregar_estaticos()
+    }
+  )
+
+  observeEvent(dados_est_poll(), {
+    dados_est(dados_est_poll())
+  }, ignoreInit = TRUE)
+
   output$ultima_atualizacao <- renderText({
     paste0("Ultima atualizacao: ",
            format(Sys.time(), "%d/%m/%Y %H:%M"))
