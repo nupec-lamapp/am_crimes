@@ -12,6 +12,12 @@ MONTH_SELECT_CHOICES <- c(
   setNames(sprintf("%02d", seq_along(MES_PT)), sprintf("%02d - %s", seq_along(MES_PT), MES_PT))
 )
 ANO_MINIMO <- 2000
+ARTIFACT_FILES <- c(
+  "data/processed/crimes_classificados.csv",
+  "outputs/04_resumo_geral.csv",
+  "outputs/04_indice_letal_mensal.csv",
+  "outputs/04_anomalias_classificacao.csv"
+)
 
 mod_controle_coleta_ui <- function(id) {
   ns <- NS(id)
@@ -40,7 +46,7 @@ mod_controle_coleta_ui <- function(id) {
         ),
         checkboxInput(ns("rodar_pipeline"), "Rodar parse + cleaning + analises", value = TRUE),
         actionButton(ns("btn_executar"), "Executar coleta", class = "btn btn-primary"),
-        actionButton(ns("btn_cancelar"), "Interromper (apos etapa atual)", class = "btn btn-danger btn-sm")
+        actionButton(ns("btn_cancelar"), "Interromper (após etapa atual)", class = "btn btn-danger btn-sm")
       )
     ),
     column(
@@ -51,7 +57,9 @@ mod_controle_coleta_ui <- function(id) {
         div(
           class = "status-summary",
           textOutput(ns("controle_info")),
-          textOutput(ns("controle_periodo"))
+          textOutput(ns("controle_periodo")),
+          uiOutput(ns("status_widget")),
+          htmlOutput(ns("artifact_list"))
         ),
         tableOutput(ns("tab_resumo_portal"))
       ),
@@ -62,19 +70,24 @@ mod_controle_coleta_ui <- function(id) {
         fluidRow(
           column(
             width = 6,
-            selectInput(ns("ano_lacunas"), "Ano:", choices = NULL, width = "100%")
+            selectInput(
+              ns("ano_lacunas"),
+              "Ano:",
+              choices = c("Todos" = "todos"),
+              width = "100%"
+            )
           ),
           column(
             width = 6,
             selectInput(ns("mes_lacunas"), "Mês:", choices = MONTH_SELECT_CHOICES, width = "100%")
           )
         ),
-        tags$small("Selecionar um portal para ver todos os meses desde janeiro de 2025, escolher o ano e o mês (ou todos os meses do ano) para exibir as lacunas."),
+        tags$small("Selecione um portal para ver, mês a mês (desde janeiro/2025), os dias que ainda faltam coletar. Use Ano/Mês para filtrar (ou deixe em \"Todos\")."),
         htmlOutput(ns("lacunas_info"))
       ),
       div(
         class = "card-panel",
-        h4("Log da execucao"),
+        h4("Log da execução"),
         verbatimTextOutput(ns("log_exec"))
       )
     )
@@ -88,6 +101,22 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     portais_status <- reactiveVal("")
     status_summary <- reactiveVal("Pronto para iniciar coleta.")
     coleta_timestamp <- reactiveVal(NULL)
+    status_details <- reactiveVal(list(state = "idle", message = "Pronto para iniciar coleta.", time = NULL, artifacts = NULL))
+
+    set_status_details <- function(state, message, artifacts = NULL) {
+      status_summary(message)
+      status_details(list(state = state, message = message, time = Sys.time(), artifacts = artifacts))
+    }
+    artifact_info <- function(paths) {
+      info <- file.info(paths)
+      info <- info[!is.na(info$mtime), , drop = FALSE]
+      if (nrow(info) == 0) return(NULL)
+      tibble::tibble(
+        path = rownames(info),
+        modified = info$mtime
+      )[order(info$mtime, decreasing = TRUE), , drop = FALSE]
+    }
+    set_status_details("idle", "Pronto para iniciar coleta.", NULL)
 
     output$portais_status <- renderText(portais_status())
     output$controle_info <- renderText(status_summary())
@@ -99,6 +128,51 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       start <- as.Date(rng[1])
       end <- as.Date(rng[2])
       sprintf("Período selecionado: %s a %s", format(start, "%d/%m/%Y"), format(end, "%d/%m/%Y"))
+    })
+    output$status_widget <- renderUI({
+      detail <- status_details()
+      state <- if (!is.null(detail$state) && nzchar(detail$state)) detail$state else "idle"
+      badge_text <- switch(
+        state,
+        success = "OK",
+        error = "ERRO",
+        warning = "ATENÇÃO",
+        running = "EM ANDAMENTO",
+        idle = "PRONTO",
+        "INFO"
+      )
+      badge_class <- switch(
+        state,
+        success = "text-success",
+        error = "text-danger",
+        warning = "text-warning",
+        running = "text-warning",
+        idle = "text-muted",
+        "text-muted"
+      )
+      badge <- tags$span(class = badge_class, style = "font-weight:bold; margin-right:8px;", badge_text)
+      message <- tags$span(detail$message)
+      last_time <- detail$time
+      time_note <- if (!is.null(last_time)) {
+        tags$span(sprintf("(%s)", format(last_time, "%d/%m/%Y %H:%M:%S")), class = "text-muted", style = "margin-left:6px;")
+      } else NULL
+      tags$div(class = "status-widget", badge, message, time_note)
+    })
+    output$artifact_list <- renderUI({
+      detail <- status_details()
+      arts <- detail$artifacts
+      if (is.null(arts) || nrow(arts) == 0) {
+        return(NULL)
+      }
+      tags$div(
+        class = "artifact-list",
+        tags$small("Arquivos atualizados:"),
+        tags$ul(
+          lapply(seq_len(nrow(arts)), function(i) {
+            tags$li(sprintf("%s (%s)", basename(arts$path[i]), format(arts$modified[i], "%d/%m/%Y %H:%M:%S")))
+          })
+        )
+      )
     })
 
     listar_portais_seguro <- function() {
@@ -141,6 +215,18 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       atualizar_portais()
     })
 
+    observeEvent(input$portais, {
+      sel <- input$portais
+      if (is.null(sel)) return()
+      if (length(sel) == 0) {
+        updateSelectInput(session, "portais", selected = "Todos")
+        return()
+      }
+      if (length(sel) > 1 && "Todos" %in% sel) {
+        updateSelectInput(session, "portais", selected = setdiff(sel, "Todos"))
+      }
+    }, ignoreInit = TRUE)
+
     observeEvent(input$preset_3, {
       updateDateRangeInput(session, "range", start = Sys.Date() - 3, end = Sys.Date())
     })
@@ -165,11 +251,23 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           .groups = "drop"
         ) %>%
         dplyr::mutate(
+          dias_periodo = as.integer(fim - inicio) + 1L,
+          dias_faltando = pmax(dias_periodo - dias_unicos, 0L),
+          cobertura_pct = ifelse(dias_periodo > 0, round(100 * dias_unicos / dias_periodo, 1), NA_real_),
           periodo = sprintf("%s - %s", format(inicio, "%d/%m/%Y"), format(fim, "%d/%m/%Y")),
           ultima_coleta = format(fim, "%d/%m/%Y")
         ) %>%
-        dplyr::select(portal, periodo, ultima_coleta, registros, dias_unicos) %>%
-        dplyr::arrange(dplyr::desc(registros))
+        dplyr::select(portal, periodo, dias_unicos, dias_faltando, cobertura_pct, registros, ultima_coleta) %>%
+        dplyr::arrange(dplyr::desc(registros)) %>%
+        dplyr::rename(
+          "Portal" = portal,
+          "Período" = periodo,
+          "Dias únicos" = dias_unicos,
+          "Dias faltando" = dias_faltando,
+          "Cobertura (%)" = cobertura_pct,
+          "Registros" = registros,
+          "Última coleta" = ultima_coleta
+        )
     }, rownames = FALSE)
 
     lacunas_cache <- reactive({
@@ -235,28 +333,26 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     observeEvent(lacunas_cache(), {
       cache <- lacunas_cache()
       if (is.null(cache)) return()
-      ano_choices <- as.character(cache$year_domain)
-      default_year <- if (length(cache$year_span) > 0) max(cache$year_span) else max(cache$year_domain)
+      year_options <- as.character(cache$year_domain)
+      ano_choices <- c("Todos" = "todos", setNames(year_options, year_options))
+      ano_atual <- isolate(input$ano_lacunas)
+      mes_atual <- isolate(input$mes_lacunas)
       updateSelectInput(
         session, "ano_lacunas",
         choices = ano_choices,
-        selected = if (!is.infinite(default_year)) as.character(default_year) else tail(ano_choices, 1)
+        selected = if (!is.null(ano_atual) && ano_atual %in% unname(ano_choices)) ano_atual else "todos"
       )
       updateSelectInput(
         session, "mes_lacunas",
         choices = MONTH_SELECT_CHOICES,
-        selected = "todos"
+        selected = if (!is.null(mes_atual) && mes_atual %in% unname(MONTH_SELECT_CHOICES)) mes_atual else "todos"
       )
     }, ignoreNULL = FALSE)
 
     observeEvent(input$portal_lacunas, {
       cache <- lacunas_cache()
       if (is.null(cache)) return()
-      portal_sel <- input$portal_lacunas
-      years <- cache$portal_years[[portal_sel]]
-      if (!is.null(years) && length(years) > 0) {
-        updateSelectInput(session, "ano_lacunas", selected = as.character(max(years)))
-      }
+      updateSelectInput(session, "ano_lacunas", selected = "todos")
       updateSelectInput(session, "mes_lacunas", selected = "todos")
     }, ignoreNULL = TRUE)
 
@@ -278,26 +374,46 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         ))
       }
 
-      ano_sel <- suppressWarnings(as.integer(input$ano_lacunas))
-      if (is.na(ano_sel) || !(ano_sel %in% cache$year_span)) {
-        ano_sel <- tail(cache$year_span, 1)
+      faltantes_total <- lengths(portal_tbl$faltantes)
+      resumo_total <- list(
+        meses_total = nrow(portal_tbl),
+        meses_completos = sum(faltantes_total == 0),
+        dias_pendentes = sum(faltantes_total)
+      )
+
+      meses <- portal_tbl
+      ano_sel <- input$ano_lacunas
+      if (!is.null(ano_sel) && ano_sel != "todos") {
+        ano_value <- suppressWarnings(as.integer(ano_sel))
+        if (!is.na(ano_value)) {
+          meses <- meses %>% dplyr::filter(ano == ano_value)
+        } else {
+          meses <- meses %>% dplyr::filter(FALSE)
+        }
       }
 
-      meses <- portal_tbl %>% dplyr::filter(ano == ano_sel)
       mes_sel <- input$mes_lacunas
       if (!is.null(mes_sel) && mes_sel != "todos") {
         mes_value <- suppressWarnings(as.integer(mes_sel))
         if (!is.na(mes_value)) {
           meses <- meses %>% dplyr::filter(mes_num == mes_value)
+        } else {
+          meses <- meses %>% dplyr::filter(FALSE)
         }
       }
 
       if (nrow(meses) == 0) {
         return(tags$div(
           class = "text-muted",
-          "Nenhum mês disponível para o ano selecionado."
+          "Nenhum mês disponível para o filtro aplicado."
         ))
       }
+
+      faltantes_filtrados <- lengths(meses$faltantes)
+      resumo_filtro <- list(
+        meses = nrow(meses),
+        dias_pendentes = sum(faltantes_filtrados)
+      )
 
       tags$div(
         tags$p(
@@ -305,6 +421,17 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           sprintf("Intervalo considerado: %s a %s",
                   format(cache$inicio, "%d/%m/%Y"),
                   format(cache$fim, "%d/%m/%Y"))
+        ),
+        tags$p(
+          class = "text-info",
+          sprintf(
+            "Resumo: %s meses no período (completos: %s) | %s dias pendentes. Filtro atual: %s meses | %s dias pendentes.",
+            resumo_total$meses_total,
+            resumo_total$meses_completos,
+            format(resumo_total$dias_pendentes, big.mark = ".", scientific = FALSE),
+            resumo_filtro$meses,
+            format(resumo_filtro$dias_pendentes, big.mark = ".", scientific = FALSE)
+          )
         ),
         if (!is.null(coleta_timestamp())) {
           tags$p(class = "text-success", sprintf("Última atualização: %s", format(coleta_timestamp(), "%d/%m/%Y %H:%M:%S")))
@@ -339,15 +466,16 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       )
     })
 
-    log_txt <- reactiveVal("Aguardando execucao.")
+    log_txt <- reactiveVal("Aguardando execução.")
     output$log_exec <- renderText(log_txt())
 
     cancelar <- reactiveVal(FALSE)
 
     observeEvent(input$btn_cancelar, {
       cancelar(TRUE)
-      log_txt("Cancelamento solicitado. A coleta atual terminara a etapa em andamento e depois para.")
+      log_txt("Cancelamento solicitado. A coleta atual terminará a etapa em andamento e depois vai parar.")
       showNotification("Cancelamento solicitado. Aguardando fim da etapa corrente.", type = "warning")
+      set_status_details("warning", "Cancelamento solicitado; a coleta será interrompida após a etapa atual.", NULL)
     })
 
     observeEvent(input$btn_executar, {
@@ -356,20 +484,20 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       d1 <- as.Date(input$range[1])
       d2 <- as.Date(input$range[2])
       if (is.na(d1) || is.na(d2) || d1 > d2) {
-        showNotification("Intervalo de datas invalido.", type = "error")
+        showNotification("Intervalo de datas inválido.", type = "error")
         return()
       }
 
       portais_sel <- input$portais
-      if (is.null(portais_sel) || "Todos" %in% portais_sel) {
+      if (is.null(portais_sel) || length(portais_sel) == 0 || identical(portais_sel, "Todos")) {
         portais_sel <- NULL
       }
 
-      log_txt("Iniciando execucao...")
-      status_summary(sprintf("Coleta em andamento (%s a %s) para portais: %s",
-                             format(d1, "%d/%m/%Y"),
-                             format(d2, "%d/%m/%Y"),
-                             if (is.null(portais_sel)) "Todos" else paste(portais_sel, collapse = ", ")))
+      log_txt("Iniciando execução...")
+      set_status_details("running", sprintf("Coleta em andamento (%s a %s) para portais: %s",
+                                     format(d1, "%d/%m/%Y"),
+                                     format(d2, "%d/%m/%Y"),
+                                     if (is.null(portais_sel)) "Todos" else paste(portais_sel, collapse = ", ")), NULL)
 
       ok <- TRUE
       withProgress(message = "Executando coleta", value = 0, {
@@ -386,6 +514,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           ok <<- FALSE
           log_txt(paste("Erro carregando scripts:", load_err))
           showNotification(paste("Erro carregando scripts:", load_err), type = "error")
+          set_status_details("error", paste("Erro carregando scripts:", load_err), NULL)
           return(NULL)
         }
         if (exists("CRIMES_AM_WORKDIR", inherits = TRUE)) {
@@ -409,21 +538,23 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           ok <<- FALSE
           log_txt(paste("Erro no scraping:", scrap_err))
           showNotification(paste("Erro no scraping:", scrap_err), type = "error")
+          set_status_details("error", paste("Erro no scraping:", scrap_err), NULL)
           return(NULL)
         }
         if (!is.na(n_raw)) log_txt(paste("Scraping OK. Registros brutos:", n_raw))
         if (is.na(n_raw) || n_raw == 0) {
           ok <<- FALSE
-          log_txt("Scraping nao retornou noticias novas. Parse/cleaning nao serao executados.")
-          showNotification("Scraping concluido sem novas noticias. Nada para processar.", type = "warning")
+          log_txt("Scraping não retornou notícias novas. Parse/cleaning não serão executados.")
+          showNotification("Scraping concluído sem novas notícias. Nada para processar.", type = "warning")
+          set_status_details("warning", "Scraping concluído sem novos registros; nenhuma atualização foi feita.", NULL)
           return()
         }
 
         if (isTRUE(cancelar())) {
           ok <<- FALSE
-          log_txt("Execucao interrompida pelo usuario apos scraping. Dados coletados foram mantidos.")
-          showNotification("Execucao interrompida apos scraping. Dados brutos mantidos.", type = "warning")
-          status_summary("Coleta interrompida pelo usuário; os dados brutos foram mantidos.")
+          log_txt("Execução interrompida pelo usuário após scraping. Dados coletados foram mantidos.")
+          showNotification("Execução interrompida após scraping. Dados brutos mantidos.", type = "warning")
+          set_status_details("warning", "Coleta interrompida pelo usuário; os dados brutos foram mantidos.", NULL)
           return()
         }
 
@@ -440,6 +571,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
             ok <<- FALSE
             log_txt(paste("Erro no parse/cleaning:", pipe_err))
             showNotification(paste("Erro no parse/cleaning:", pipe_err), type = "error")
+            set_status_details("error", paste("Erro no parse/cleaning:", pipe_err), NULL)
             return(NULL)
           }
         }
@@ -449,13 +581,30 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       if (!isTRUE(ok)) return()
 
-      dados_enr(carregar_principal())
-      dados_est(carregar_estaticos())
-      coleta_timestamp(Sys.time())
-      log_txt("Execucao finalizada com sucesso.")
-      status_summary(sprintf("Coleta concluida em %s; lacunas e cobertura atualizadas.",
-                             format(coleta_timestamp(), "%d/%m/%Y %H:%M:%S")))
-      showNotification("Coleta finalizada e lacunas recalculadas.", type = "message")
+      if (isTRUE(input$rodar_pipeline)) {
+        dados_enr(carregar_principal())
+        dados_est(carregar_estaticos())
+        coleta_timestamp(Sys.time())
+        log_txt("Execução finalizada com sucesso.")
+        artifacts <- artifact_info(ARTIFACT_FILES)
+        set_status_details(
+          "success",
+          sprintf(
+            "Coleta concluída em %s; lacunas e cobertura atualizadas.",
+            format(coleta_timestamp(), "%d/%m/%Y %H:%M:%S")
+          ),
+          artifacts
+        )
+        showNotification("Coleta finalizada e lacunas recalculadas.", type = "message")
+      } else {
+        log_txt("Coleta finalizada (pipeline desativado).")
+        set_status_details(
+          "warning",
+          "Coleta finalizada, mas o pipeline está desativado; lacunas e cobertura não foram recalculadas.",
+          NULL
+        )
+        showNotification("Coleta finalizada, mas pipeline desativado (lacunas não recalculadas).", type = "warning")
+      }
     })
   })
 }
