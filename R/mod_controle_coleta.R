@@ -67,22 +67,16 @@ mod_controle_coleta_ui <- function(id) {
         class = "card-panel",
         h4("Lacunas por portal"),
         selectInput(ns("portal_lacunas"), "Portal:", choices = "Selecione", width = "50%"),
-        fluidRow(
-          column(
-            width = 6,
-            selectInput(
-              ns("ano_lacunas"),
-              "Ano:",
-              choices = c("Todos" = "todos"),
-              width = "100%"
-            )
-          ),
-          column(
-            width = 6,
-            selectInput(ns("mes_lacunas"), "Mês:", choices = MONTH_SELECT_CHOICES, width = "100%")
-          )
+        dateRangeInput(
+          ns("lacunas_range"),
+          "Intervalo:",
+          start = as.Date("2025-01-01"),
+          end   = Sys.Date(),
+          format = "dd/mm/yyyy",
+          language = "pt-BR",
+          width = "100%"
         ),
-        tags$small("Selecione um portal para ver, mês a mês (desde janeiro/2025), os dias que ainda faltam coletar. Use Ano/Mês para filtrar (ou deixe em \"Todos\")."),
+        tags$small("Use o intervalo para filtrar os meses. Meses fora do intervalo coletado aparecem como \"Fora do intervalo coletado\"."),
         htmlOutput(ns("lacunas_info"))
       ),
       div(
@@ -359,19 +353,22 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     observeEvent(lacunas_cache(), {
       cache <- lacunas_cache()
       if (is.null(cache)) return()
-      year_options <- as.character(cache$year_domain)
-      ano_choices <- c("Todos" = "todos", setNames(year_options, year_options))
-      ano_atual <- isolate(input$ano_lacunas)
-      mes_atual <- isolate(input$mes_lacunas)
-      updateSelectInput(
-        session, "ano_lacunas",
-        choices = ano_choices,
-        selected = if (!is.null(ano_atual) && ano_atual %in% unname(ano_choices)) ano_atual else "todos"
-      )
-      updateSelectInput(
-        session, "mes_lacunas",
-        choices = MONTH_SELECT_CHOICES,
-        selected = if (!is.null(mes_atual) && mes_atual %in% unname(MONTH_SELECT_CHOICES)) mes_atual else "todos"
+      range_atual <- input$lacunas_range
+      min_date <- as.Date(sprintf("%d-01-01", ANO_MINIMO))
+      max_date <- cache$fim
+      start_date <- if (is.null(range_atual) || any(is.na(range_atual))) cache$inicio else as.Date(range_atual[1])
+      end_date <- if (is.null(range_atual) || any(is.na(range_atual))) cache$fim else as.Date(range_atual[2])
+      if (is.na(start_date) || is.na(end_date) || start_date > end_date) {
+        start_date <- cache$inicio
+        end_date <- cache$fim
+      }
+      updateDateRangeInput(
+        session,
+        "lacunas_range",
+        start = start_date,
+        end = end_date,
+        min = min_date,
+        max = max_date
       )
     }, ignoreNULL = FALSE)
 
@@ -380,14 +377,17 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       if (is.null(cache)) return()
       portal_sel <- input$portal_lacunas
       if (is.null(portal_sel) || portal_sel == "Selecione") return()
-      portal_years <- cache$portal_years[[portal_sel]]
-      default_year <- if (!is.null(portal_years) && length(portal_years) > 0) {
-        as.character(max(portal_years, na.rm = TRUE))
-      } else {
-        "todos"
+      portal_range <- NULL
+      if (!is.null(cache$portal_ranges)) {
+        portal_range <- cache$portal_ranges[cache$portal_ranges$portal == portal_sel, , drop = FALSE]
       }
-      updateSelectInput(session, "ano_lacunas", selected = default_year)
-      updateSelectInput(session, "mes_lacunas", selected = "todos")
+      portal_inicio <- if (!is.null(portal_range) && nrow(portal_range) > 0) portal_range$inicio_portal[1] else cache$inicio
+      portal_fim <- if (!is.null(portal_range) && nrow(portal_range) > 0) portal_range$fim_portal[1] else cache$fim
+      if (is.na(portal_inicio) || is.na(portal_fim) || portal_inicio > portal_fim) {
+        portal_inicio <- cache$inicio
+        portal_fim <- cache$fim
+      }
+      updateDateRangeInput(session, "lacunas_range", start = portal_inicio, end = portal_fim)
     }, ignoreNULL = TRUE)
 
     output$lacunas_info <- renderUI({
@@ -428,25 +428,27 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       )
 
       meses <- portal_tbl
-      ano_sel <- input$ano_lacunas
-      if (!is.null(ano_sel) && ano_sel != "todos") {
-        ano_value <- suppressWarnings(as.integer(ano_sel))
-        if (!is.na(ano_value)) {
-          meses <- meses %>% dplyr::filter(ano == ano_value)
-        } else {
-          meses <- meses %>% dplyr::filter(FALSE)
-        }
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        range_start <- cache$inicio
+        range_end <- cache$fim
+      } else {
+        range_start <- as.Date(range_sel[1])
+        range_end <- as.Date(range_sel[2])
       }
-
-      mes_sel <- input$mes_lacunas
-      if (!is.null(mes_sel) && mes_sel != "todos") {
-        mes_value <- suppressWarnings(as.integer(mes_sel))
-        if (!is.na(mes_value)) {
-          meses <- meses %>% dplyr::filter(mes_num == mes_value)
-        } else {
-          meses <- meses %>% dplyr::filter(FALSE)
-        }
+      if (is.na(range_start) || is.na(range_end) || range_start > range_end) {
+        return(tags$div(
+          class = "text-warning",
+          "Intervalo de datas invalido para filtrar as lacunas."
+        ))
       }
+      meses <- meses %>%
+        dplyr::filter(fim >= range_start, inicio <= range_end) %>%
+        dplyr::mutate(
+          faltantes_range = lapply(faltantes, function(dias) {
+            dias[dias >= range_start & dias <= range_end]
+          })
+        )
 
       if (nrow(meses) == 0) {
         return(tags$div(
@@ -456,26 +458,34 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       }
 
       meses_in <- meses %>% dplyr::filter(!fora_intervalo)
-      faltantes_filtrados <- if (nrow(meses_in) > 0) lengths(meses_in$faltantes) else integer()
+      faltantes_filtrados <- if (nrow(meses_in) > 0) lengths(meses_in$faltantes_range) else integer()
       resumo_filtro <- list(
         meses = nrow(meses_in),
         dias_pendentes = sum(faltantes_filtrados)
       )
 
+      intervalo_portal_texto <- if (!is.na(portal_inicio) && !is.na(portal_fim)) {
+        sprintf("Intervalo considerado: %s a %s",
+                format(portal_inicio, "%d/%m/%Y"),
+                format(portal_fim, "%d/%m/%Y"))
+      } else {
+        "Intervalo considerado: indisponivel."
+      }
+
       tags$div(
         tags$p(
           class = "text-muted",
-          sprintf("Intervalo considerado: %s a %s",
-                  format(portal_inicio, "%d/%m/%Y"),
-                  format(portal_fim, "%d/%m/%Y"))
+          intervalo_portal_texto
         ),
         tags$p(
           class = "text-info",
           sprintf(
-            "Resumo: %s meses no período (completos: %s) | %s dias pendentes. Filtro atual: %s meses | %s dias pendentes.",
+            "Resumo: %s meses no periodo (completos: %s) | %s dias pendentes. Filtro atual (%s a %s): %s meses | %s dias pendentes.",
             resumo_total$meses_total,
             resumo_total$meses_completos,
             format(resumo_total$dias_pendentes, big.mark = ".", scientific = FALSE),
+            format(range_start, "%d/%m/%Y"),
+            format(range_end, "%d/%m/%Y"),
             resumo_filtro$meses,
             format(resumo_filtro$dias_pendentes, big.mark = ".", scientific = FALSE)
           )
@@ -490,7 +500,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
           lapply(seq_len(nrow(meses)), function(i) {
             row <- meses[i, ]
-            dias <- row$faltantes[[1]]
+            dias <- row$faltantes_range[[1]]
             fora_intervalo <- isTRUE(row$fora_intervalo)
             dias_lista <- if (fora_intervalo) {
               tags$span(class = "text-muted", "Fora do intervalo coletado")
@@ -664,3 +674,5 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     })
   })
 }
+
+
