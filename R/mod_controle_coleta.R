@@ -304,14 +304,39 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         return(NULL)
       }
 
+      portal_ranges <- df_proc %>%
+        dplyr::group_by(portal) %>%
+        dplyr::summarise(
+          inicio_portal = min(data_pub, na.rm = TRUE),
+          fim_portal = max(data_pub, na.rm = TRUE),
+          .groups = "drop"
+        )
+
       portal_list <- sort(unique(df_proc$portal))
       portal_missing <- lapply(portal_list, function(portal) {
         presentes <- unique(df_proc$data_pub[df_proc$portal == portal])
-        faltantes <- mapply(function(primeiro, ultimo) {
-          dias_mes <- seq(primeiro, ultimo, by = "day")
-          sort(setdiff(dias_mes, presentes))
+        portal_range <- portal_ranges[portal_ranges$portal == portal, , drop = FALSE]
+        portal_inicio <- portal_range$inicio_portal[1]
+        portal_fim <- portal_range$fim_portal[1]
+
+        calc <- mapply(function(primeiro, ultimo) {
+          if (is.na(portal_inicio) || is.na(portal_fim)) {
+            return(list(faltantes = as.Date(character()), fora_intervalo = TRUE))
+          }
+          calc_inicio <- max(primeiro, portal_inicio)
+          calc_fim <- min(ultimo, portal_fim)
+          if (is.na(calc_inicio) || is.na(calc_fim) || calc_inicio > calc_fim) {
+            list(faltantes = as.Date(character()), fora_intervalo = TRUE)
+          } else {
+            dias_mes <- seq(calc_inicio, calc_fim, by = "day")
+            list(faltantes = sort(setdiff(dias_mes, presentes)), fora_intervalo = FALSE)
+          }
         }, month_info$inicio, month_info$fim, SIMPLIFY = FALSE)
-        month_info %>% dplyr::mutate(faltantes = faltantes)
+
+        faltantes <- lapply(calc, `[[`, "faltantes")
+        fora_intervalo <- vapply(calc, `[[`, logical(1), "fora_intervalo")
+        month_info %>%
+          dplyr::mutate(faltantes = faltantes, fora_intervalo = fora_intervalo)
       })
       names(portal_missing) <- portal_list
 
@@ -324,6 +349,7 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         year_span = sort(unique(month_info$ano)),
         year_domain = seq(ANO_MINIMO, lubridate::year(fim)),
         portal = portal_missing,
+        portal_ranges = portal_ranges,
         portal_years = setNames(portal_years$years, portal_years$portal),
         inicio = min(month_info$inicio),
         fim = max(month_info$fim)
@@ -352,7 +378,15 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
     observeEvent(input$portal_lacunas, {
       cache <- lacunas_cache()
       if (is.null(cache)) return()
-      updateSelectInput(session, "ano_lacunas", selected = "todos")
+      portal_sel <- input$portal_lacunas
+      if (is.null(portal_sel) || portal_sel == "Selecione") return()
+      portal_years <- cache$portal_years[[portal_sel]]
+      default_year <- if (!is.null(portal_years) && length(portal_years) > 0) {
+        as.character(max(portal_years, na.rm = TRUE))
+      } else {
+        "todos"
+      }
+      updateSelectInput(session, "ano_lacunas", selected = default_year)
       updateSelectInput(session, "mes_lacunas", selected = "todos")
     }, ignoreNULL = TRUE)
 
@@ -374,9 +408,21 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         ))
       }
 
-      faltantes_total <- lengths(portal_tbl$faltantes)
+      if (!"fora_intervalo" %in% names(portal_tbl)) {
+        portal_tbl$fora_intervalo <- FALSE
+      }
+
+      portal_range <- NULL
+      if (!is.null(cache$portal_ranges)) {
+        portal_range <- cache$portal_ranges[cache$portal_ranges$portal == portal_sel, , drop = FALSE]
+      }
+      portal_inicio <- if (!is.null(portal_range) && nrow(portal_range) > 0) portal_range$inicio_portal[1] else as.Date(NA)
+      portal_fim <- if (!is.null(portal_range) && nrow(portal_range) > 0) portal_range$fim_portal[1] else as.Date(NA)
+
+      portal_tbl_in <- portal_tbl %>% dplyr::filter(!fora_intervalo)
+      faltantes_total <- if (nrow(portal_tbl_in) > 0) lengths(portal_tbl_in$faltantes) else integer()
       resumo_total <- list(
-        meses_total = nrow(portal_tbl),
+        meses_total = nrow(portal_tbl_in),
         meses_completos = sum(faltantes_total == 0),
         dias_pendentes = sum(faltantes_total)
       )
@@ -409,9 +455,10 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         ))
       }
 
-      faltantes_filtrados <- lengths(meses$faltantes)
+      meses_in <- meses %>% dplyr::filter(!fora_intervalo)
+      faltantes_filtrados <- if (nrow(meses_in) > 0) lengths(meses_in$faltantes) else integer()
       resumo_filtro <- list(
-        meses = nrow(meses),
+        meses = nrow(meses_in),
         dias_pendentes = sum(faltantes_filtrados)
       )
 
@@ -419,8 +466,8 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         tags$p(
           class = "text-muted",
           sprintf("Intervalo considerado: %s a %s",
-                  format(cache$inicio, "%d/%m/%Y"),
-                  format(cache$fim, "%d/%m/%Y"))
+                  format(portal_inicio, "%d/%m/%Y"),
+                  format(portal_fim, "%d/%m/%Y"))
         ),
         tags$p(
           class = "text-info",
@@ -444,7 +491,10 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           lapply(seq_len(nrow(meses)), function(i) {
             row <- meses[i, ]
             dias <- row$faltantes[[1]]
-            dias_lista <- if (length(dias) == 0) {
+            fora_intervalo <- isTRUE(row$fora_intervalo)
+            dias_lista <- if (fora_intervalo) {
+              tags$span(class = "text-muted", "Fora do intervalo coletado")
+            } else if (length(dias) == 0) {
               tags$span(class = "text-success", "Sem lacunas")
             } else {
               tags$div(
@@ -457,7 +507,13 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
               tags$strong(row$mes_label),
               tags$p(
                 class = "text-secondary mb-1",
-                if (length(dias) == 0) "Dias completos" else sprintf("%s dias faltando", length(dias))
+                if (fora_intervalo) {
+                  "Sem coleta nesse periodo"
+                } else if (length(dias) == 0) {
+                  "Dias completos"
+                } else {
+                  sprintf("%s dias faltando", length(dias))
+                }
               ),
               dias_lista
             )
