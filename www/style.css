@@ -28,6 +28,30 @@ body {
   letter-spacing: 0.5px;
 }
 
+.titulo-projeto-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.titulo-projeto-text {
+  flex: 1;
+  text-align: center;
+}
+
+.titulo-projeto-logos {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.titulo-projeto-logos .logo-parceiro {
+  max-height: 44px;
+  filter: none;
+  opacity: 1;
+}
+
 .subtitulo-projeto {
   font-size: 14px;
   opacity: 0.9;
@@ -191,6 +215,20 @@ body {
 }
 
 @media (max-width: 768px) {
+  .titulo-projeto-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .titulo-projeto-logos {
+    justify-content: center;
+  }
+
+  .titulo-projeto-text {
+    width: 100%;
+    order: -1;
+  }
+
   .logos-row {
     gap: 16px;
   }

@@ -35,7 +35,23 @@ ui <- fluidPage(
             class = "header-nupec",
             div(
               class = "titulo-projeto",
-              "Monitor de Crimes Violentos - Amazonas"
+              div(
+                class = "titulo-projeto-row",
+                div(
+                  class = "titulo-projeto-logos titulo-projeto-logos-left",
+                  tags$img(src = "logo_lamapp.jpg", class = "logo-parceiro", alt = "LAMAPP"),
+                  tags$img(src = "logo_nupec.jpg", class = "logo-parceiro", alt = "NuPeC")
+                ),
+                div(
+                  class = "titulo-projeto-text",
+                  "Monitor de Crimes Violentos - Amazonas"
+                ),
+                div(
+                  class = "titulo-projeto-logos titulo-projeto-logos-right",
+                  tags$img(src = "Logo_UFAM.png", class = "logo-parceiro", alt = "UFAM"),
+                  tags$img(src = "Logomarca ICET sem fundo PNG P.png", class = "logo-parceiro", alt = "ICET")
+                )
+              )
             ),
             div(
               class = "subtitulo-projeto",
@@ -44,28 +60,6 @@ ui <- fluidPage(
             div(
               class = "subtitulo-meta",
               textOutput("ultima_atualizacao", inline = TRUE)
-            )
-          )
-        )
-      ),
-      fluidRow(
-        column(
-          width = 12,
-          div(
-            class = "card-panel logos-panel",
-            div(
-              class = "logos-row",
-              style = "display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;",
-              div(
-                style = "display:flex; align-items:center; flex-wrap:wrap; gap:12px;",
-                tags$img(src = "logo_lamapp.jpg", class = "logo-parceiro", alt = "LAMAPP"),
-                tags$img(src = "logo_nupec.jpg", class = "logo-parceiro", alt = "NuPeC")
-              ),
-              div(
-                style = "display:flex; align-items:center; flex-wrap:wrap; gap:12px;",
-                tags$img(src = "Logo_UFAM.png", class = "logo-parceiro", alt = "UFAM"),
-                tags$img(src = "Logomarca ICET sem fundo PNG P.png", class = "logo-parceiro", alt = "ICET")
-              )
             )
           )
         )
