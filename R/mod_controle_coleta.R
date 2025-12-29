@@ -62,7 +62,11 @@ mod_controle_coleta_ui <- function(id) {
           uiOutput(ns("status_widget")),
           htmlOutput(ns("artifact_list"))
         ),
-        tableOutput(ns("tab_resumo_portal"))
+        DT::DTOutput(ns("tab_resumo_portal")),
+        tags$hr(),
+        tags$small(class = "text-muted", "Detalhe mensal ajuda a ver volumes e dias ativos por mês."),
+        selectInput(ns("portal_cobertura"), "Detalhar portal:", choices = "Todos", width = "50%"),
+        DT::DTOutput(ns("tab_resumo_portal_mensal"))
       ),
       div(
         class = "card-panel",
@@ -237,6 +241,11 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         choices = c("Selecione", portais),
         selected = if (length(portais) > 0) portais[[1]] else "Selecione"
       )
+      updateSelectInput(
+        session, "portal_cobertura",
+        choices = c("Todos", portais),
+        selected = "Todos"
+      )
     }
 
     atualizar_portais()
@@ -267,10 +276,11 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       updateDateRangeInput(session, "range", start = Sys.Date() - 30, end = Sys.Date())
     })
 
-    output$tab_resumo_portal <- renderTable({
+    output$tab_resumo_portal <- DT::renderDT({
       df <- dados_enr()
       if (is.null(df) || nrow(df) == 0) return(NULL)
-      df %>%
+
+      resumo <- df %>%
         dplyr::filter(!is.na(data_pub)) %>%
         dplyr::group_by(portal) %>%
         dplyr::summarise(
@@ -278,27 +288,117 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
           fim    = max(data_pub, na.rm = TRUE),
           registros = dplyr::n(),
           dias_unicos = dplyr::n_distinct(data_pub),
+          meses_com_dados = dplyr::n_distinct(lubridate::floor_date(data_pub, "month")),
           .groups = "drop"
         ) %>%
         dplyr::mutate(
           dias_periodo = as.integer(fim - inicio) + 1L,
           dias_faltando = pmax(dias_periodo - dias_unicos, 0L),
           cobertura_pct = ifelse(dias_periodo > 0, round(100 * dias_unicos / dias_periodo, 1), NA_real_),
+          registros_por_dia = ifelse(dias_unicos > 0, round(registros / dias_unicos, 1), NA_real_),
           periodo = sprintf("%s - %s", format(inicio, "%d/%m/%Y"), format(fim, "%d/%m/%Y")),
           ultima_coleta = format(fim, "%d/%m/%Y")
         ) %>%
-        dplyr::select(portal, periodo, dias_unicos, dias_faltando, cobertura_pct, registros, ultima_coleta) %>%
+        dplyr::select(
+          portal,
+          periodo,
+          inicio,
+          fim,
+          meses_com_dados,
+          dias_unicos,
+          dias_faltando,
+          cobertura_pct,
+          registros,
+          registros_por_dia,
+          ultima_coleta
+        ) %>%
         dplyr::arrange(dplyr::desc(registros)) %>%
         dplyr::rename(
           "Portal" = portal,
-          "Período" = periodo,
-          "Dias únicos" = dias_unicos,
+          "Periodo" = periodo,
+          "Inicio" = inicio,
+          "Fim" = fim,
+          "Meses com dados" = meses_com_dados,
+          "Dias unicos" = dias_unicos,
           "Dias faltando" = dias_faltando,
           "Cobertura (%)" = cobertura_pct,
           "Registros" = registros,
-          "Última coleta" = ultima_coleta
+          "Registros/dia" = registros_por_dia,
+          "Ultima coleta" = ultima_coleta
         )
-    }, rownames = FALSE)
+
+      DT::datatable(
+        resumo,
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(8, "desc"))
+        )
+      )
+    })
+
+    output$tab_resumo_portal_mensal <- DT::renderDT({
+      df <- dados_enr()
+      if (is.null(df) || nrow(df) == 0) return(NULL)
+
+      df_proc <- df %>%
+        dplyr::filter(!is.na(data_pub)) %>%
+        dplyr::mutate(mes = lubridate::floor_date(data_pub, "month"))
+
+      portal_sel <- input$portal_cobertura
+      if (!is.null(portal_sel) && portal_sel != "Todos") {
+        df_proc <- df_proc %>% dplyr::filter(portal == portal_sel)
+      }
+      if (nrow(df_proc) == 0) return(NULL)
+
+      mensal <- df_proc %>%
+        dplyr::group_by(portal, mes) %>%
+        dplyr::summarise(
+          inicio = min(data_pub, na.rm = TRUE),
+          fim = max(data_pub, na.rm = TRUE),
+          registros = dplyr::n(),
+          dias_unicos = dplyr::n_distinct(data_pub),
+          .groups = "drop"
+        ) %>%
+        dplyr::mutate(
+          mes_label = format(mes, "%Y-%m"),
+          dias_periodo = as.integer(fim - inicio) + 1L,
+          cobertura_pct = ifelse(dias_periodo > 0, round(100 * dias_unicos / dias_periodo, 1), NA_real_),
+          registros_por_dia = ifelse(dias_unicos > 0, round(registros / dias_unicos, 1), NA_real_)
+        ) %>%
+        dplyr::arrange(dplyr::desc(mes), portal) %>%
+        dplyr::select(
+          portal,
+          mes_label,
+          inicio,
+          fim,
+          dias_unicos,
+          cobertura_pct,
+          registros,
+          registros_por_dia
+        ) %>%
+        dplyr::rename(
+          "Portal" = portal,
+          "Mes" = mes_label,
+          "Inicio" = inicio,
+          "Fim" = fim,
+          "Dias unicos" = dias_unicos,
+          "Cobertura (%)" = cobertura_pct,
+          "Registros" = registros,
+          "Registros/dia" = registros_por_dia
+        )
+
+      DT::datatable(
+        mensal,
+        rownames = FALSE,
+        options = list(
+          pageLength = 12,
+          scrollX = TRUE,
+          order = list(list(1, "desc"))
+        )
+      )
+    })
 
     lacunas_cache <- reactive({
       df <- dados_enr()
@@ -508,6 +608,27 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         "Intervalo considerado: indisponivel."
       }
 
+      lacunas_tbl <- meses %>%
+        dplyr::mutate(
+          dias_faltando = lengths(faltantes_range),
+          dias_faltando_lista = vapply(faltantes_range, function(dias) {
+            if (length(dias) == 0) return("—")
+            paste(format(dias, "%d/%m"), collapse = ", ")
+          }, character(1)),
+          status_mes = dplyr::if_else(
+            fora_intervalo,
+            "Fora do intervalo coletado",
+            dplyr::if_else(dias_faltando == 0, "Completo", "Pendente")
+          )
+        ) %>%
+        dplyr::select(mes_label, status_mes, dias_faltando, dias_faltando_lista) %>%
+        dplyr::rename(
+          "Mes" = mes_label,
+          "Status" = status_mes,
+          "Dias faltando" = dias_faltando,
+          "Dias nao coletados (dd/mm)" = dias_faltando_lista
+        )
+
       tags$div(
         tags$p(
           class = "text-muted",
@@ -531,39 +652,14 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
         } else {
           NULL
         },
-        tags$div(
-          class = "lacunas-grid",
-          style = "display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;",
-          lapply(seq_len(nrow(meses)), function(i) {
-            row <- meses[i, ]
-            dias <- row$faltantes_range[[1]]
-            fora_intervalo <- isTRUE(row$fora_intervalo)
-            dias_lista <- if (fora_intervalo) {
-              tags$span(class = "text-muted", "Fora do intervalo coletado")
-            } else if (length(dias) == 0) {
-              tags$span(class = "text-success", "Sem lacunas")
-            } else {
-              tags$div(
-                class = "lacunas-days",
-                paste(format(dias, "%d"), collapse = ", ")
-              )
-            }
-            tags$div(
-              class = "lacunas-card",
-              tags$strong(row$mes_label),
-              tags$p(
-                class = "text-secondary mb-1",
-                if (fora_intervalo) {
-                  "Sem coleta nesse periodo"
-                } else if (length(dias) == 0) {
-                  "Dias completos"
-                } else {
-                  sprintf("%s dias faltando", length(dias))
-                }
-              ),
-              dias_lista
-            )
-          })
+        DT::datatable(
+          lacunas_tbl,
+          rownames = FALSE,
+          options = list(
+            dom = "tip",
+            pageLength = min(24, nrow(lacunas_tbl)),
+            scrollX = TRUE
+          )
         )
       )
     })
