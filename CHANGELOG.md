@@ -9,6 +9,9 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 - Aba "Controle de Coleta": tabela "Cobertura por portal" agora mostra `Dias faltando` e `Cobertura (%)` além do período e totais.
 - Aba "Controle de Coleta": feedback de execução mais explícito (status PRONTO/EM ANDAMENTO/ATENÇÃO/ERRO/OK, mensagens e aviso quando o pipeline está desativado).
 
+### Removido
+- Aba "Apresentação": painel "Executar pipeline (admin)".
+
 ## [0.0.7] - 2025-12-28
 
 ### Adicionado

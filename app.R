@@ -66,18 +66,10 @@ ui <- fluidPage(
       ),
       fluidRow(
         column(
-          width = 8,
+          width = 12,
           div(
             class = "card-panel",
             uiOutput("apresentacao_md")
-          )
-        ),
-        column(
-          width = 4,
-          div(
-            class = "card-panel",
-            h4("Executar pipeline (admin)"),
-            mod_controle_pipeline_ui("pipeline")
           )
         )
       ),
