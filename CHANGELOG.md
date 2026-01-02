@@ -2,6 +2,23 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [0.0.8] - 2025-12-29
+
+### Atualizado
+- Aba "Controle de Coleta": filtros de lacunas por `Portal` + `Ano` (desde 2000) + `Mês` (ou "Todos"), mantendo a visualização mês a mês desde janeiro/2025.
+- Aba "Controle de Coleta": tabela "Cobertura por portal" agora mostra `Dias faltando` e `Cobertura (%)` além do período e totais.
+- Aba "Controle de Coleta": feedback de execução mais explícito (status PRONTO/EM ANDAMENTO/ATENÇÃO/ERRO/OK, mensagens e aviso quando o pipeline está desativado).
+
+### Removido
+- Aba "Apresentação": painel "Executar pipeline (admin)".
+
+## [0.0.7] - 2025-12-28
+
+### Adicionado
+- Painel de "Lacunas por portal" reorganizado para exibir todos os meses desde janeiro de 2025 e os dias que ainda faltam coletar.
+### Atualizado
+- Metadados e documentação de versionamento ajustados para a nova release.
+
 ## [0.0.1] - 2025-01-XX
 
 ### Adicionado

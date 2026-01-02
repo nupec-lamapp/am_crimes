@@ -1,0 +1,127 @@
+---
+title: "Monitoramento automatizado de crimes violentos no Amazonas via web scraping"
+subtitle: "Uma arquitetura de coleta, classificação e visualização em Shiny"
+author:
+  - name: "Hidelbrando Ferreira Rodrigues, Dr."
+    affiliation: "1"
+    email: "hrodrigues@ufam.edu.br"
+    orcid: "0000-0003-1266-0957"
+affiliation:
+  - id: "1"
+    name: "NuPeC / LAMAPP, UFAM, Manaus–AM, Brasil"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+lang: pt-BR
+keywords:
+  - "segurança pública"
+  - "web scraping"
+  - "violência urbana"
+  - "painel interativo"
+  - "reprodutibilidade"
+abstract: |
+  **Resumo:** O artigo apresenta o pipeline `crimes_am`, que automatiza a coleta, classificação e visualização de notícias sobre crimes violentos no Amazonas.
+  Describe a arquitetura de scraping, processamento e versionamento, destaca métricas de cobertura e evidencia como
+  a rastreabilidade (Git, changelog, scripts `versionar.*`, `renv`) sustenta a confiabilidade dos indicadores.
+  Aponta também o uso de testes `testthat` e a integração com o dashboard Shiny para fins de monitoramento operacional.
+thanks: |
+  Financiamento: NuPeC / LAMAPP / UFAM.  
+  Agradecimentos: equipe de pesquisa e colaboradores do monitoramento.  
+output:
+  html_document:
+    toc: false
+    number_sections: true
+    latex_engine: xelatex
+bibliography: references.bib
+csl: csl/abnt.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 6.5,
+  fig.height = 4,
+  fig.align = "center"
+)
+options(scipen = 999)
+```
+
+# Identificação do artigo
+
+**Título curto:** Monitoramento automatizado de crimes violentos  
+**Autor correspondente:** Hidelbrando Ferreira Rodrigues (hidelbrando@example.com)  
+**ORCID:** 0000-0000-0000-0000
+
+# Introdução
+
+O estado do Amazonas enfrenta desafios particulares relacionados à violência urbana e à sensação de insegurança, porque grande parte das ocorrências são divulgadas apenas em mídias locais, muitas vezes em linguagem natural não estruturada. O monitor `crimes_am` propõe um sistema automatizado para acompanhar notícias policiais nesses portais, oferecendo uma base de dados padronizada e indicadores quantitativos que podem subsidiar pesquisadores, gestores públicos e movimentos sociais. Nesta arquitetura, o monitor combina técnicas de scraping, heurísticas de classificação e um dashboard Shiny para tornar explícitos os vieses de cobertura e os padrões temporais da violência.
+
+# Materiais e Métodos
+
+## Design e escopo do monitoramento
+
+Trata-se de um estudo observacional contínuo, cuja unidade de análise são notícias publicadas em portais de imprensa digitais sobre eventos criminais no Amazonas. Os portais monitorados — dentre eles `acritica.com.br/policia`, `emtempo.com.br`, `d24am.com/policia` e `g1.globo.com/am/amazonas` — foram selecionados por sua relevância regional e regularidade na atualização de pautas policiais. O período de coleta pode ser definido pelo usuário do pipeline via `run_pipeline.R`, que aceita intervalo de datas (default: últimos 7 dias) e gera logs cronológicos em `logs/pipeline.log`.
+
+## Pipeline computacional
+
+A execução do pipeline segue uma sequência bem definida:
+
+1. **Coleta (`scripts/01_scraping.R`)**, onde cada portal é acessado por requisições HTTP configuradas com user-agent institucional, retries exponenciais/backoff e registro em logs específicos (`logs/scraping.log`). O conteúdo bruto é armazenado em `data/raw/`.
+2. **Padronização (`scripts/02_parse.R`)**, que lê todos os CSVs gerados, aplica normalização textual (lowercase, transliteração ASCII, remoção de pontuação) e remove duplicados observados em uma janela de 7 dias por meio do identificador de título. Essa etapa também valida a presença das colunas essenciais (`portal`, `data_publicacao`, `titulo`, `url`).
+3. **Limpeza e enriquecimento (`scripts/03_cleaning.R`)**, que injeta classificações por categoria/gravidade (via `classification_utils.R`), calcula variáveis demográficas derivadas (gênero, idade, faixa etária) e exporta o dataset final em `data/processed/crimes_classificados.csv`, além de gerar dicionários auxiliares (`data/processed/dicionario_tipos_observado.csv`, `data/processed/dicionario_tipos_crime.csv`) e um template de validação manual (`validacao_manual_tipos.csv`).
+4. **Análises (`scripts/04_analysis.R`)**, responsável por calcular resumos geral/por categoria/por portal, proporções de crimes letais e salvar outputs tabulares e gráficos em `outputs/`. Essa etapa também valida que a coluna `crime_violento` existe no dataset final.
+
+O controlador `run_pipeline.R` orquestra essas etapas, medindo tempo de execução e registrando métricas de volume em cada fase por meio das funções `run_step()` e `log_pipeline()`.
+
+## Versionamento e reprodutibilidade
+
+O repositório utiliza Git com branches (`main`, `develop`, `release`) e tags semânticas identificadas em `CHANGELOG.md`. Documentos como `VERSIONAMENTO.md` e `INSTRUCOES_GIT.md` explicitam o fluxo de release MAJOR.MINOR.PATCH, desde o uso de `git add`/`commit` até a publicação de tags (`v0.0.5`, `0.0.6`) e release notes. Scripts de automação (`versionar.sh` e `versionar.bat`) consolidam o processo, garantindo que os arquivos relevantes (app, documentação, changelog) sejam incluídos.
+
+Além disso, `.Rprofile` ativa `renv` (`renv/activate.R`) para isolar dependências, enquanto `DESCRIPTION` lista os pacotes principais (`shiny`, `dplyr`, `ggplot2`, `rvest`, `textrecipes`, etc.). Esse esquema assegura que uma execução posterior do pipeline possa ser reproduzida a partir da mesma versão tagueada, mantendo consistência entre ambiente computacional, dados brutos e indicadores finais.
+
+## Validação e controle de qualidade
+
+O projeto inclui testes `testthat` (`tests/testthat/`) que validam utilitários de scraping (domínio, extração de data e padronização textual), classificadores de crimes e a presença de colunas essenciais no dataset processado. Esses testes atuam como guardrails durante alterações de código e, em conjunto com os templates de validação manual e os dicionários observados, formam uma camada de auditoria que reduz o risco de regressões em análises subsequentes.
+
+# Resultados
+
+## Perfil do corpus processado
+
+Os artefatos de saída registram o volume de notícias coletadas por portal e por período (mínimo/máximo), exibindo também as taxas de deduplicação observadas na etapa de parse. O dataset final (`data/processed/crimes_classificados.csv`) contém as variáveis `categoria`, `tipo_principal`, `gravidade`, `crime_violento`, além de indicadores demográficos (gênero, idade, faixa etária), o que permite caracterizar a distribuição dos crimes violentos no Amazonas.
+
+## Indicadores e comparações
+
+Os scripts de análise produzem resumos tabulares (`outputs/04_resumo_*.csv`) para proporções gerais e estratificadas por categoria e portal, bem como gráficos temporais para padrões mensais. Esses elementos revelam diferenças na cobertura entre portais, como a predominância de homicídios em determinados meios ou a maior taxa relativa de violência sexual em outros, evidenciando vieses editoriais. Os indicadores também permitem comparar a prevalência de crimes letais frente a outros tipos, fornecendo subsídios quantitativos para debates na política de segurança.
+
+# Discussão
+
+Ao automatizar a coleta e rastrear cada versão do pipeline, o monitor `crimes_am` garante que indicadores apresentados em relatórios ou dashboards possam ser relacionados a um commit/tags específicos, reforçando as inferências sobre tendências criminais. Ainda assim, é necessário reconhecer limitações: mudanças nos layouts dos portais podem interromper o scraping, o conteúdo midiático pode não refletir a totalidade dos crimes reportados oficialmente e a classificação heurística depende de padrões linguísticos que nem sempre capturam nuances contextuais.
+
+# Conclusões
+
+O pipeline descrito constitui um instrumento reprodutível e rastreável para monitorar crimes violentos no Amazonas. A combinação de scraping resiliente, enriquecimento semântico e versionamento rigoroso fornece uma base metodológica sólida para produzir indicadores confiáveis, oferecendo um modelo replicável em outras unidades da federação.
+
+# Declarações
+
+**Contribuição dos autores (CRediT):** ...  
+**Financiamento:** ...  
+**Conflito de interesses:** Nenhum declarado.  
+**Disponibilidade de dados e código:** repositório `https://github.com/nupec-lamapp/crimes_am`, tag `v0.0.5`/`0.0.6`.
+
+# Referências
+
+<!-- Referências são geradas via references.bib e csl -->
+
+# Apêndice — Reprodutibilidade operacional
+
+## Ambiente computacional
+
+```{r session-info}
+sessionInfo()
+```
+
+## Versão do código
+
+```{r git-version}
+try(system("git describe --tags --always", intern = TRUE), silent = TRUE)
+```

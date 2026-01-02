@@ -1,8 +1,8 @@
 # Guia de Versionamento - Monitor de Crimes Violentos
 
-Este documento contém instruções para versionar o projeto no GitHub.
+Este documento contém instruções atualizadas para registrar versões no GitHub.
 
-## Versão Atual: 0.0.1
+## Versão Atual: 0.0.7
 
 ## Comandos para Versionamento
 
@@ -15,52 +15,40 @@ git status
 ### 2. Adicionar Arquivos Modificados
 
 ```bash
-# Adicionar todos os arquivos modificados
+# Liste explicitamente os arquivos-chave antes do commit
 git add app.R
-git add APRESENTACAO.md
+git add ArtigoWebSrapingSegurancapublica.Rmd
+git add csl/abnt.csl
+git add references.bib
 git add CHANGELOG.md
 git add VERSIONAMENTO.md
-
-# Ou adicionar tudo de uma vez
+git add INSTRUCOES_GIT.md
+# Ou adicione tudo de uma vez
 git add .
 ```
 
-### 3. Criar Commit da Versão 0.0.1
+### 3. Criar Commit da Versão 0.0.7
 
 ```bash
-git commit -m "v0.0.1: Layout horizontal de logos, aba Apresentação como primeira guia e melhorias na série mensal
+git commit -m "v0.0.7: Lacunas mensais no painel de coleta e ajustes de deploy
 
-- Adicionada aba Apresentação como primeira guia do dashboard
-- Logos reposicionadas horizontalmente no cabeçalho (UFAM/ICET à esquerda, LAMAPP/NuPeC à direita)
-- Série mensal corrigida para ser reativa aos filtros
-- Melhorado tratamento de erros para evitar páginas em branco
-- Criado arquivo APRESENTACAO.md com descrição completa do projeto
-- Criado CHANGELOG.md para documentação de versões"
+- reorganiza a aba de lacunas para mostrar meses desde jan/2025 e os dias faltantes
+- inclui arquivos essenciais no bundle e atualiza metas de deploy
+- atualiza metadados e documentação para 0.0.7"
 ```
 
-### 4. Criar Tag de Versão
+### 4. Criar Tag da Versão
 
 ```bash
-# Criar tag anotada
-git tag -a v0.0.1 -m "Versão 0.0.1 - Layout horizontal de logos e aba Apresentação integrada"
-
-# Ou criar tag simples
-git tag v0.0.1
+# Tag anotada
+git tag -a v0.0.7 -m "Versão 0.0.7 - lacunas mensais e ajustes de deploy"
 ```
 
 ### 5. Enviar para o GitHub
 
 ```bash
-# Enviar commits
-git push origin main
-
-# Ou se a branch for master
-git push origin master
-
-# Enviar tags
-git push origin v0.0.1
-
-# Ou enviar todas as tags
+git push origin develop
+git push origin v0.0.7
 git push origin --tags
 ```
 
@@ -69,25 +57,25 @@ git push origin --tags
 ### Formato de Versão: MAJOR.MINOR.PATCH
 
 - **MAJOR**: Mudanças incompatíveis com versões anteriores
-- **MINOR**: Novas funcionalidades compatíveis com versões anteriores
-- **PATCH**: Correções de bugs
+- **MINOR**: Novas funcionalidades compatíveis
+- **PATCH**: Correções de bugs e ajustes menores
 
-### Histórico de Versões
+## Histórico de Versões
 
-- **v0.0.1** (2025-01-XX): Versão inicial - Layout horizontal, aba Apresentação, melhorias na série mensal, sistema de versionamento
+- **v0.0.7 (2025-12-28)**: reorganização da aba "Lacunas por portal" para exibir cada mês desde jan/2025 com os dias faltantes, atualização das instruções e metadados para a nova release.
+- **v0.0.6 (2025-12-27)**: Template científico, créditos e documentação de versionamento atualizados.
+- **v0.0.5 (2025-12-26)**: Integração com todos os portais monitorados e botão de atualização do dashboard.
+- **v0.0.1 (2025-01-XX)**: Versão inicial com layout horizontal e aba Apresentação.
 
 ## Arquivos Importantes para Versionamento
 
 - `app.R` - Aplicativo Shiny principal
-- `APRESENTACAO.md` - Documentação do projeto
-- `CHANGELOG.md` - Registro de alterações
-- `README.md` - Documentação principal
-- `VERSIONAMENTO.md` - Este arquivo
+- `ArtigoWebSrapingSegurancapublica.Rmd` - Template do artigo científico
+- `CHANGELOG.md` - Registro de alterações por versão
+- `VERSIONAMENTO.md`, `INSTRUCOES_GIT.md` - Guias de versionamento/comandos
 
 ## Notas
 
-- Sempre atualize o `CHANGELOG.md` antes de criar uma nova versão
-- Use mensagens de commit descritivas e em português
-- Crie tags para todas as versões importantes
-- Mantenha o histórico de versões atualizado
-
+- Sempre atualize `CHANGELOG.md` antes de rotular uma nova versão
+- Mensagens de commit devem ser descritivas e em português
+- Crie tags para todas as versões públicas e mantenha o histórico limpo
