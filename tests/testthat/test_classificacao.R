@@ -1,5 +1,11 @@
 library(testthat)
 
+test_that("classificador identifica tentativa de homicidio", {
+  res <- classificar_crime_completo("Suspeito de tentativa de homicidio e preso")
+  expect_equal(res$categoria, "Crime Letal Violento")
+  expect_match(res$tipo_principal, "Tentativa de Homic")
+})
+
 test_that("classificador identifica homicídio e feminicídio", {
   res1 <- classificar_crime_completo("Homem é morto a tiros em Manaus")
   expect_equal(res1$categoria, "Crime Letal Violento")

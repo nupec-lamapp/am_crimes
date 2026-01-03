@@ -1,11 +1,11 @@
 ############################################################
 # APP SHINY - Monitor de Crimes Violentos (Amazonas)
-# Versao 0.0.7 - Arquitetura modular
+# Versao 0.0.9 - Arquitetura modular  
 ############################################################
 
 source("global.R")
 source("R/mod_dashboard.R")
-source("R/mod_relatorios.R")
+source("R/mod_relatorios.R") 
 source("R/mod_controle_pipeline.R")
 source("R/mod_controle_coleta.R")
 source("R/mod_equipes_e_parcerias.R")
@@ -119,7 +119,7 @@ ui <- fluidPage(
           width = 12,
           div(
             class = "card-panel",
-            includeMarkdown("ArtigoWebSrapingSegurancapublica.md")
+            uiOutput("artigo_ui")
           )
         )
       )
@@ -188,6 +188,87 @@ server <- function(input, output, session) {
   output$apresentacao_md <- renderUI({
     carregar_apresentacao()
   })
+
+  output$artigo_ui <- renderUI({
+    rmd <- "ArtigoWebSrapingSegurancapublica.Rmd"
+
+    if (!file.exists(rmd)) {
+      return(HTML("<p><strong>Artigo indisponivel:</strong> arquivo ArtigoWebSrapingSegurancapublica.Rmd nao encontrado.</p>"))
+    }
+
+    render_artigo_fallback_md <- function(rmd_path) {
+      linhas <- tryCatch(
+        readLines(rmd_path, warn = FALSE, encoding = "UTF-8"),
+        error = function(e) character()
+      )
+      if (length(linhas) == 0) {
+        return(HTML("<p><strong>Artigo indisponivel:</strong> falha ao ler o arquivo .Rmd.</p>"))
+      }
+
+      # Remove YAML header
+      if (trimws(linhas[1]) == "---") {
+        pos <- which(trimws(linhas[-1]) == "---")[1]
+        if (!is.na(pos)) {
+          linhas <- linhas[-seq_len(pos + 1)]
+        }
+      }
+
+      # Remove knitr chunks (```{r ...} ... ```)
+      out <- character()
+      in_chunk <- FALSE
+      for (ln in linhas) {
+        if (!in_chunk && grepl("^```\\{r", ln)) {
+          in_chunk <- TRUE
+          next
+        }
+        if (in_chunk && grepl("^```\\s*$", ln)) {
+          in_chunk <- FALSE
+          next
+        }
+        if (in_chunk) next
+        out <- c(out, ln)
+      }
+
+      tmp_md <- file.path(tempdir(), "ArtigoWebSrapingSegurancapublica_fallback.md")
+      tryCatch(writeLines(out, tmp_md, useBytes = TRUE), error = function(e) invisible(NULL))
+      if (!file.exists(tmp_md)) {
+        return(HTML("<p><strong>Artigo indisponivel:</strong> falha ao gerar versao Markdown.</p>"))
+      }
+      includeMarkdown(tmp_md)
+    }
+
+    if (!requireNamespace("rmarkdown", quietly = TRUE) || !isTRUE(rmarkdown::pandoc_available())) {
+      return(render_artigo_fallback_md(rmd))
+    }
+
+    out_dir <- tempdir()
+    out_file <- file.path(out_dir, "ArtigoWebSrapingSegurancapublica.html")
+
+    precisa_render <- !file.exists(out_file) ||
+      isTRUE(file.info(out_file)$mtime < file.info(rmd)$mtime)
+
+    if (isTRUE(precisa_render)) {
+      tryCatch(
+        rmarkdown::render(
+          input = rmd,
+          output_file = basename(out_file),
+          output_dir = out_dir,
+          quiet = TRUE,
+          envir = new.env(parent = globalenv())
+        ),
+        error = function(e) {
+          warning("Falha ao renderizar ArtigoWebSrapingSegurancapublica.Rmd: ", e$message)
+        }
+      )
+    }
+
+    if (!file.exists(out_file)) {
+      return(render_artigo_fallback_md(rmd))
+    }
+
+    htmltools::includeHTML(out_file)
+  })
+  outputOptions(output, "artigo_ui", suspendWhenHidden = TRUE)
 
   mod_dashboard_server("dashboard", dados_enr)
   mod_relatorios_server("relatorios", dados_est)

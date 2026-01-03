@@ -56,11 +56,37 @@ options(scipen = 999)
 
 O estado do Amazonas enfrenta desafios particulares relacionados à violência urbana e à sensação de insegurança, porque grande parte das ocorrências são divulgadas apenas em mídias locais, muitas vezes em linguagem natural não estruturada. O monitor `crimes_am` propõe um sistema automatizado para acompanhar notícias policiais nesses portais, oferecendo uma base de dados padronizada e indicadores quantitativos que podem subsidiar pesquisadores, gestores públicos e movimentos sociais. Nesta arquitetura, o monitor combina técnicas de scraping, heurísticas de classificação e um dashboard Shiny para tornar explícitos os vieses de cobertura e os padrões temporais da violência.
 
-# Materiais e Métodos
+Este artigo apresenta o `crimes_am` como um estudo metodológico sobre coleta automática de informação na web em um domínio sensível (segurança pública), com ênfase em decisões algorítmicas e em engenharia de dados para garantir robustez e auditabilidade. A contribuição não reside em “raspar” páginas isoladas, mas em especificar e implementar um protocolo reprodutível de aquisição e consolidação de metadados jornalísticos sob restrições operacionais (volatilidade de layout, limitações de taxa, falhas de rede) e sob uma postura ética explícita.
+
+As contribuições podem ser resumidas em: (i) uma arquitetura multiportal baseada em coletores parametrizáveis com interface uniforme e extração redundante de campos críticos (título, URL, data); (ii) um pipeline determinístico de consolidação (normalização, deduplicação e enriquecimento) com artefatos rastreáveis (logs, backups, dicionários) e governança de dependências via `renv`; e (iii) um desenho de avaliação que separa caracterização do corpus (estatísticas descritivas e outputs analíticos) de validação de tipologia (fluxo de anotação manual e auditoria por matriz de confusão), evitando inferência indevida a partir de métricas não independentes.
+
+<!-- Verificação crítica (Introdução): o texto explicita contribuição e delimita o escopo (metodologia/engenharia); ainda falta detalhar o “baseline” comparativo (por exemplo, scraping sem controle de falhas) para sustentar o valor incremental. -->
+
+# Trabalhos relacionados
+
+Projetos de coleta automatizada na web situam-se na interseção entre *web crawling* (descoberta e navegação de recursos) e *extração de informação* (parsing e estruturação de conteúdo semiestruturado). No contexto de portais jornalísticos, o problema raramente admite uma solução puramente sintática: a estrutura HTML incorpora ruído (componentes de navegação, publicidade, widgets), mudanças frequentes de layout e heterogeneidade entre domínios, exigindo heurísticas robustas para localizar entidades-alvo (URL, título, data) e mecanismos de tolerância a falhas para preservar a continuidade operacional.
+
+Do ponto de vista algorítmico, a literatura e a prática industrial convergem na necessidade de separar (i) a etapa de aquisição (controle de requisições, limitações de taxa, retries, timeouts, tratamento de HTTP 429/5xx), (ii) a etapa de extração (parsers para HTML/XML, regras ou wrappers, estratégias redundantes para campos críticos) e (iii) a etapa de consolidação (deduplicação, normalização, validação e versionamento). Em sistemas que visam monitoramento contínuo, falhas não são eventos excepcionais: elas compõem o regime normal de operação, motivando desenho idempotente, logging estruturado e checkpoints que permitam auditoria e reexecução.
+
+No eixo de qualidade de dados, a deduplicação constitui um problema não trivial: notícias podem ser republicadas, atualizadas, reindexadas e redistribuídas via RSS, e o mesmo evento pode gerar títulos linguisticamente próximos em dias consecutivos. Estratégias estritas (chave por URL) minimizam falsos positivos, porém mantêm redundância quando múltiplas URLs representam o mesmo item. Estratégias aproximadas (normalização textual e janela temporal) reduzem redundância, porém introduzem risco de colapsar eventos distintos com títulos similares. Assim, projetos aplicados precisam explicitar o operador de deduplicação e tratá-lo como escolha metodológica, não como detalhe de implementação.
+
+Finalmente, há um eixo ético-operacional inseparável do método: respeito a `robots.txt`, identificação explícita do agente (user-agent), minimização de impacto por limitação de taxa e tratamento adequado de respostas de *rate limiting* são requisitos para que o experimento computacional seja defensável. Tais aspectos também funcionam como instrumentos de reprodutibilidade: ao reduzir variabilidade induzida por bloqueios e instabilidades de rede, eles aumentam a comparabilidade entre execuções e diminuem o risco de vieses de coleta por falhas sistemáticas.
+
+<!-- Verificação crítica (Trabalhos relacionados): o texto delimita crawling vs extração, explicita trade-offs de deduplicação e integra ética ao método; falta ainda ancoragem bibliográfica específica, a ser adicionada conforme o recorte do periódico. -->
+
+# Metodologia e Arquitetura do Sistema
 
 ## Design e escopo do monitoramento
 
-Trata-se de um estudo observacional contínuo, cuja unidade de análise são notícias publicadas em portais de imprensa digitais sobre eventos criminais no Amazonas. Os portais monitorados — dentre eles `acritica.com.br/policia`, `emtempo.com.br`, `d24am.com/policia` e `g1.globo.com/am/amazonas` — foram selecionados por sua relevância regional e regularidade na atualização de pautas policiais. O período de coleta pode ser definido pelo usuário do pipeline via `run_pipeline.R`, que aceita intervalo de datas (default: últimos 7 dias) e gera logs cronológicos em `logs/pipeline.log`.
+Trata-se de um estudo observacional contínuo, cuja unidade de análise são notícias publicadas em portais de imprensa digitais sobre eventos criminais no Amazonas. Os portais monitorados - dentre eles `acritica.com.br/policia`, `emtempo.com.br`, `d24am.com/policia` e `g1.globo.com/am/amazonas` - foram selecionados por sua relevância regional e regularidade na atualização de pautas policiais. O período de coleta pode ser definido pelo usuário do pipeline via `run_pipeline.R`, que aceita intervalo de datas (default: últimos 7 dias) e gera logs cronológicos em `logs/pipeline.log`.
+
+## Considerações éticas e legais
+
+Este trabalho assume que a coleta automatizada deve ser tratada como experimento computacional com impacto sobre infraestrutura de terceiros. Assim, a estratégia de aquisição incorpora (i) identificação explícita do agente por user-agent institucional, (ii) limitação de taxa por atrasos aleatórios e (iii) tratamento conservador de respostas de *rate limiting* (HTTP 429), evitando comportamento adversarial. Quando disponível, o sistema consulta `robots.txt` e bloqueia requisições não permitidas; em caso de conflito entre viabilidade técnica e diretrizes do servidor, priorizamos a política explícita de acesso.
+
+Do ponto de vista jurídico, este artigo não assume permissões irrestritas: portais podem impor termos de uso e restrições implícitas que variam ao longo do tempo. Por esse motivo, o pipeline coleta apenas metadados necessários ao monitoramento (título, URL, data), não realiza bypass de paywalls/CAPTCHAs e não emprega técnicas de evasão (rotação de IP, spoofing agressivo, execução distribuída não coordenada). Essas escolhas reduzem risco de violação de políticas e também estabilizam a reprodutibilidade empírica do corpus coletado.
+
+<!-- Verificação crítica (Ética/Legal): o texto conecta decisões de aquisição a minimização de impacto; falta ainda um procedimento operacional de “kill switch” e um protocolo de contato/identificação para administradores dos sites quando necessário. -->
 
 ## Pipeline computacional
 
@@ -73,9 +99,39 @@ A execução do pipeline segue uma sequência bem definida:
 
 O controlador `run_pipeline.R` orquestra essas etapas, medindo tempo de execução e registrando métricas de volume em cada fase por meio das funções `run_step()` e `log_pipeline()`.
 
+### Implementação e estratégia algorítmica
+
+Do ponto de vista de pesquisa em algoritmos e engenharia de dados, o scraping em `scripts/01_scraping.R` implementa um *conjunto de coletores* (um por portal) com a mesma interface. Cada coletor recebe um intervalo de datas `(data_inicio, data_fim)` e devolve um `tibble` padronizado, com pelo menos `portal`, `data_publicacao`, `titulo` e `url` (e, quando aplicável, `data_publicacao_faltante` e `crime_violento`). O objetivo é capturar um *catálogo mínimo de evidências* (metadados) para monitoramento: o scraper **não** extrai o corpo completo das matérias, apenas metadados necessários para análise temporal e classificação textual baseada em título.
+
+Em alto nível, o algoritmo global executado por `rodar_scraping()` pode ser descrito como:
+
+1. **Selecionar portais**: iterar sobre a lista de coletores registrados (registry de funções) e executar cada coletor de forma sequencial.
+2. **Gerar candidatos (URL + título)** por duas estratégias complementares:
+   - **RSS/XML** (ex.: G1 Amazonas; D24AM quando o feed está disponível): baixar o feed, parsear XML e extrair `title/link/pubDate`.
+   - **Listagem HTML paginada** (ex.: A Crítica, Em Tempo; fallback do D24AM): iterar páginas até `max_paginas`, extrair links na listagem e visitar cada artigo para recuperar a data de publicação.
+3. **Extrair `data_publicacao`** com heurísticas robustas e redundantes, priorizando fontes estruturadas (JSON-LD `application/ld+json`, meta tags como `article:published_time`) e usando seletores HTML (`time`, etc.) como fallback; quando necessário, há conversão de datas em pt-BR.
+4. **Filtrar o intervalo temporal**: manter itens com `data_publicacao` entre `data_inicio` e `data_fim`. Itens sem data podem ser mantidos com `data_publicacao_faltante = TRUE` para auditoria (por exemplo, para detectar mudanças de layout que quebrem a extração).
+5. **Deduplicar intra-coletor** por URL (`distinct(url, .keep_all = TRUE)`), reduzindo repetições causadas por feeds/menus/reposts dentro do mesmo portal.
+6. **Persistir e auditar**: gravar CSVs em `data/raw/` (um por portal e intervalo) e registrar eventos e falhas em `logs/scraping.log` (rede, parsing, páginas sem links, etc.).
+
+O desenho do scraper inclui mecanismos de robustez e minimização de impacto:
+
+- Requisições HTTP via `httr::GET` com **user-agent institucional**, timeout e cabeçalhos padrão.
+- **Rate limiting** por jitter (`Sys.sleep` aleatório) para reduzir rajadas de requisições.
+- **Retries com backoff** para erros transitórios (HTTP 429 e 5xx), incluindo suporte a `Retry-After` quando o servidor informa o tempo de espera.
+- **Consulta a robots.txt (quando disponível)** via `robotstxt`, bloqueando URLs não permitidas e registrando o evento em log.
+- **Cache em memória por URL** durante a execução, evitando baixar o mesmo recurso repetidamente dentro do mesmo run.
+
+Parâmetros relevantes para a coleta podem ser ajustados sem alterar código, por exemplo:
+
+- `CRIMES_AM_MAX_PAGINAS`: limita a profundidade de paginação em portais com listagem HTML (default típico: 20).
+- `CRIMES_AM_INCLUIR_SEM_DATA`: controla se itens sem data são mantidos com `data_publicacao_faltante = TRUE` (útil para diagnóstico sem perda de evidência).
+
+<!-- Verificação crítica (Scraping/algoritmo): a seção formaliza entradas/saídas e mecanismos de robustez; falta ainda caracterização quantitativa de falhas (e.g., proporção de páginas sem data) e comparação com estratégias alternativas (RSS vs. HTML). -->
+
 ## Versionamento e reprodutibilidade
 
-O repositório utiliza Git com branches (`main`, `develop`, `release`) e tags semânticas identificadas em `CHANGELOG.md`. Documentos como `VERSIONAMENTO.md` e `INSTRUCOES_GIT.md` explicitam o fluxo de release MAJOR.MINOR.PATCH, desde o uso de `git add`/`commit` até a publicação de tags (`v0.0.5`, `0.0.6`) e release notes. Scripts de automação (`versionar.sh` e `versionar.bat`) consolidam o processo, garantindo que os arquivos relevantes (app, documentação, changelog) sejam incluídos.
+O repositório utiliza Git com branches (`main`, `develop`, `release`) e tags semânticas identificadas em `CHANGELOG.md`. Documentos como `VERSIONAMENTO.md` e `INSTRUCOES_GIT.md` explicitam o fluxo de release MAJOR.MINOR.PATCH, desde o uso de `git add`/`commit` até a publicação de tags (`v0.0.9`) e release notes. Scripts de automação (`versionar.sh` e `versionar.bat`) consolidam o processo, garantindo que os arquivos relevantes (app, documentação, changelog) sejam incluídos.
 
 Além disso, `.Rprofile` ativa `renv` (`renv/activate.R`) para isolar dependências, enquanto `DESCRIPTION` lista os pacotes principais (`shiny`, `dplyr`, `ggplot2`, `rvest`, `textrecipes`, etc.). Esse esquema assegura que uma execução posterior do pipeline possa ser reproduzida a partir da mesma versão tagueada, mantendo consistência entre ambiente computacional, dados brutos e indicadores finais.
 
@@ -83,30 +139,60 @@ Além disso, `.Rprofile` ativa `renv` (`renv/activate.R`) para isolar dependênc
 
 O projeto inclui testes `testthat` (`tests/testthat/`) que validam utilitários de scraping (domínio, extração de data e padronização textual), classificadores de crimes e a presença de colunas essenciais no dataset processado. Esses testes atuam como guardrails durante alterações de código e, em conjunto com os templates de validação manual e os dicionários observados, formam uma camada de auditoria que reduz o risco de regressões em análises subsequentes.
 
-# Resultados
+# Avaliação experimental e resultados
 
 ## Perfil do corpus processado
 
-Os artefatos de saída registram o volume de notícias coletadas por portal e por período (mínimo/máximo), exibindo também as taxas de deduplicação observadas na etapa de parse. O dataset final (`data/processed/crimes_classificados.csv`) contém as variáveis `categoria`, `tipo_principal`, `gravidade`, `crime_violento`, além de indicadores demográficos (gênero, idade, faixa etária), o que permite caracterizar a distribuição dos crimes violentos no Amazonas.
+Para a avaliação experimental, utilizamos a base consolidada gerada pelo pipeline (arquivo `data/processed/crimes_classificados.csv`), contendo $N=2241$ registros com `data_publicacao` no intervalo de 2025-01-18 a 2026-01-01. A distribuição por portal foi assimétrica: `acritica` (1257; 56,1%), `emtempo` (688; 30,7%), `g1_amazonas` (242; 10,8%) e `d24am` (54; 2,4%). Essa assimetria é esperada em sistemas de scraping multiportal e deve ser explicitada porque condiciona estimativas agregadas e comparações entre fontes.
+
+O dataset final contém as variáveis `categoria`, `tipo_principal`, `gravidade` e `crime_violento`, além de indicadores demográficos derivados (gênero, idade, faixa etária). No snapshot analisado, o classificador heurístico sinalizou `crime_violento = TRUE` em 907 registros (40,5%) e manteve 1334 (59,5%) em `categoria = "Outros"`, evidenciando a cobertura parcial do vocabulário de padrões e a necessidade de auditoria contínua sobre itens não classificados.
+
+<!-- Verificação crítica (Avaliação/corpus): o texto reporta N, intervalo temporal e composição por portal; ainda falta reportar estatísticas de falha de extração (e.g., itens sem data) e sensibilidade dos indicadores a deduplicação e parâmetros de coleta. -->
 
 ## Indicadores e comparações
 
-Os scripts de análise produzem resumos tabulares (`outputs/04_resumo_*.csv`) para proporções gerais e estratificadas por categoria e portal, bem como gráficos temporais para padrões mensais. Esses elementos revelam diferenças na cobertura entre portais, como a predominância de homicídios em determinados meios ou a maior taxa relativa de violência sexual em outros, evidenciando vieses editoriais. Os indicadores também permitem comparar a prevalência de crimes letais frente a outros tipos, fornecendo subsídios quantitativos para debates na política de segurança.
+Os scripts de análise produzem resumos tabulares (`outputs/04_resumo_*.csv`) para proporções gerais e estratificadas por categoria e portal, bem como gráficos temporais (por exemplo, séries mensais e índices agregados). Esses artefatos não substituem bases oficiais de criminalidade; eles operacionalizam, de forma reprodutível, uma descrição do corpus coletado e permitem inspecionar variações entre fontes e ao longo do tempo, incluindo vieses editoriais e eventuais instabilidades da coleta.
+
+<!-- Verificação crítica (Indicadores): o texto evita inferência indevida e descreve o papel dos outputs; faltam ainda exemplos quantitativos (com intervalos/datas) para sustentar comparações específicas entre portais. -->
+
+## Avaliação da classificação
+
+Para avaliar a etapa de classificação de `tipo_principal`, o repositório inclui um mecanismo de validação manual (arquivo `data/processed/validacao_manual_tipos.csv`) e um script de auditoria (`scripts/legacy/06_avaliacao_classificador.R`) que gera matriz de confusão e métricas por classe em `outputs/eval/`. O procedimento usa `tipo_corrigido` como rótulo de referência e compara com a predição heurística, produzindo medidas como *precision*, *recall* e $F_1$ por classe.
+
+No entanto, no snapshot analisado a validação manual ainda não introduz correções substantivas (isto é, `tipo_corrigido` coincide com a saída heurística). Consequentemente, as métricas em `outputs/eval/` representam um limite superior trivial e não constituem evidência empírica de desempenho fora da amostra. Uma avaliação defensável requer amostragem independente, dupla anotação e análise de erros, com atenção especial a classes raras e a ambiguidades linguísticas.
+
+<!-- Verificação crítica (Avaliação da classificação): a seção descreve protocolo e invalida leitura ingênua de métricas; falta ainda plano experimental com tamanho amostral, concordância entre anotadores e critérios de desempate. -->
 
 # Discussão
 
-Ao automatizar a coleta e rastrear cada versão do pipeline, o monitor `crimes_am` garante que indicadores apresentados em relatórios ou dashboards possam ser relacionados a um commit/tags específicos, reforçando as inferências sobre tendências criminais. Ainda assim, é necessário reconhecer limitações: mudanças nos layouts dos portais podem interromper o scraping, o conteúdo midiático pode não refletir a totalidade dos crimes reportados oficialmente e a classificação heurística depende de padrões linguísticos que nem sempre capturam nuances contextuais.
+Ao automatizar a coleta e rastrear cada versão do pipeline, o monitor `crimes_am` permite relacionar indicadores apresentados em relatórios ou dashboards a commits/tags específicos. Essa propriedade é relevante porque o objeto empírico (notícias em portais) e a infraestrutura de aquisição (HTML/RSS, políticas de rate limiting, disponibilidade do servidor) introduzem variabilidade exógena; ao explicitar versões de código e parâmetros, o sistema reduz ambiguidade causal em análises temporais e facilita auditoria.
 
-# Conclusões
+# Limitações
 
-O pipeline descrito constitui um instrumento reprodutível e rastreável para monitorar crimes violentos no Amazonas. A combinação de scraping resiliente, enriquecimento semântico e versionamento rigoroso fornece uma base metodológica sólida para produzir indicadores confiáveis, oferecendo um modelo replicável em outras unidades da federação.
+Este estudo opera sobre uma fonte observacional mediada por critérios editoriais: notícias jornalísticas não constituem uma medida direta da incidência criminal. Como consequência, tendências e comparações entre categorias/portais refletem simultaneamente o fenômeno social e o filtro de cobertura (seleção, ênfase narrativa, atualização e republicação). Essa limitação é estrutural e deve ser tratada como viés de amostragem, não como “erro” do scraper.
+
+Do ponto de vista computacional, a coleta depende de artefatos voláteis (marcação HTML, endpoints RSS e convenções de metadados). Mudanças de layout, bloqueios, CAPTCHAs ou variações em respostas HTTP podem degradar o desempenho de extração e produzir faltas sistemáticas (por exemplo, aumento de `data_publicacao_faltante` em um portal específico). Mesmo com retries/backoff e controle de taxa, a disponibilidade da fonte e a política do servidor permanecem fora do controle experimental.
+
+A deduplicação introduz trade-offs metodológicos. Regras estritas por URL preservam eventos distintos, mas mantêm redundância sob URLs múltiplas; regras aproximadas por título e janela temporal reduzem redundância, mas podem colapsar eventos distintos com títulos similares e, inversamente, manter duplicatas quando a redação muda substantivamente. Assim, indicadores sensíveis a contagem (volume por dia/categoria) devem reportar explicitamente o operador de deduplicação adotado.
+
+Por fim, a classificação semântica atual utiliza heurísticas baseadas em padrões lexicais no título. Essa escolha favorece interpretabilidade e baixo custo de manutenção, mas limita cobertura e pode introduzir erros sistemáticos (polissemia, negação, metáforas, eufemismos e variantes ortográficas). A avaliação de qualidade precisa, portanto, de amostras rotuladas de forma independente e de análise de erros orientada a categorias com baixa prevalência.
+
+<!-- Verificação crítica (Limitações): o texto separa viés observacional de falhas computacionais e explicita trade-offs de deduplicação/classificação; falta ainda quantificação empírica de falhas de extração por portal e análise longitudinal do drift de layout. -->
+
+# Conclusão e trabalhos futuros
+
+O pipeline descrito constitui um instrumento reprodutível e rastreável para monitorar crimes violentos no Amazonas. A combinação de aquisição automatizada, extração semiestruturada, deduplicação e enriquecimento semântico define um protocolo computacional que permite produzir séries temporais e indicadores derivados, desde que interpretados sob as limitações de viés de cobertura e volatilidade das fontes.
+
+Como trabalhos futuros, destacamos: (i) instrumentar métricas de sucesso/falha por portal (taxas de HTTP error, itens sem data, tempo por etapa) para avaliação contínua; (ii) introduzir detecção de drift de layout e testes de contrato para seletores de extração; (iii) conduzir avaliação independente da classificação com amostras rotuladas por múltiplos avaliadores e análise sistemática de erros; e (iv) ampliar a triangulação com dados oficiais e/ou outras fontes (boletins, bases administrativas) para avaliar vieses de cobertura e calibrar inferências.
+
+<!-- Verificação crítica (Conclusão): o texto delimita o que é garantido (protocolo computacional reprodutível) e o que permanece condicionado (viés/volatilidade), e lista agenda testável; pode ser refinado com contribuições explícitas em forma de hipóteses e métricas de avaliação. -->
 
 # Declarações
 
 **Contribuição dos autores (CRediT):** ...  
 **Financiamento:** ...  
 **Conflito de interesses:** Nenhum declarado.  
-**Disponibilidade de dados e código:** repositório `https://github.com/nupec-lamapp/crimes_am`, tag `v0.0.5`/`0.0.6`.
+**Disponibilidade de dados e código:** repositório `https://github.com/nupec-lamapp/crimes_am`, tag `v0.0.9`.
 
 # Referências
 

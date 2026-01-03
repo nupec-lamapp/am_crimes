@@ -22,7 +22,9 @@ ARTIFACT_FILES <- c(
 mod_controle_coleta_ui <- function(id) {
   ns <- NS(id)
 
-  fluidRow(
+  tagList(
+    tags$head(tags$style(HTML("#tabs_controle li:nth-child(2), #tabs_controle li:nth-child(4){display:none;}"))),
+    fluidRow(
     column(
       width = 4,
       wellPanel(
@@ -52,44 +54,274 @@ mod_controle_coleta_ui <- function(id) {
     ),
     column(
       width = 8,
-      div(
-        class = "card-panel",
-        h4("Cobertura por portal (dados carregados)"),
-        div(
-          class = "status-summary",
-          textOutput(ns("controle_info")),
-          textOutput(ns("controle_periodo")),
-          uiOutput(ns("status_widget")),
-          htmlOutput(ns("artifact_list"))
+      tabsetPanel(
+        id = ns("tabs_controle"),
+        type = "tabs",
+        
+        # Aba 1: Visão Geral e Cobertura
+        tabPanel(
+          title = tagList(icon("chart-line"), "Visão Geral"),
+          div(
+            class = "card-panel",
+            h4("Cobertura por portal (dados carregados)"),
+            div(
+              class = "status-summary",
+              textOutput(ns("controle_info")),
+              textOutput(ns("controle_periodo")),
+              uiOutput(ns("status_widget")),
+              htmlOutput(ns("artifact_list"))
+            ),
+            DT::DTOutput(ns("tab_resumo_portal")),
+            tags$hr(),
+            tags$small(class = "text-muted", "Detalhe mensal ajuda a ver volumes e dias ativos por mês."),
+            selectInput(ns("portal_cobertura"), "Detalhar portal:", choices = "Todos", width = "50%"),
+            DT::DTOutput(ns("tab_resumo_portal_mensal"))
+          )
         ),
-        DT::DTOutput(ns("tab_resumo_portal")),
-        tags$hr(),
-        tags$small(class = "text-muted", "Detalhe mensal ajuda a ver volumes e dias ativos por mês."),
-        selectInput(ns("portal_cobertura"), "Detalhar portal:", choices = "Todos", width = "50%"),
-        DT::DTOutput(ns("tab_resumo_portal_mensal"))
-      ),
-      div(
-        class = "card-panel",
-        h4("Lacunas por portal"),
-        selectInput(ns("portal_lacunas"), "Portal:", choices = "Selecione", width = "50%"),
-        dateRangeInput(
-          ns("lacunas_range"),
-          "Intervalo:",
-          start = as.Date("2025-01-01"),
-          end   = Sys.Date(),
-          format = "dd/mm/yyyy",
-          language = "pt-BR",
-          width = "100%"
+        
+        # Aba 2: Inventário de Arquivos (NOVA)
+        tabPanel(
+          title = tagList(icon("folder-open"), "Inventário"),
+          div(
+            class = "card-panel",
+            h4("Inventário de Arquivos Coletados"),
+            tags$p(
+              class = "text-muted",
+              "Lista completa de arquivos raw coletados, com informações sobre portal, período, tamanho e status de processamento."
+            ),
+            fluidRow(
+              column(
+                width = 6,
+                selectInput(
+                  ns("inventario_portal_filtro"),
+                  "Filtrar por portal:",
+                  choices = "Todos",
+                  width = "100%"
+                )
+              ),
+              column(
+                width = 6,
+                actionButton(ns("btn_atualizar_inventario"), "Atualizar inventário", 
+                           class = "btn btn-sm btn-secondary", icon = icon("refresh"))
+              )
+            ),
+            tags$hr(),
+            h5("Resumo por Portal"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Múltiplos arquivos por portal são normais - cada coleta gera um arquivo separado. ",
+                        "O sistema consolida automaticamente todos os arquivos durante o processamento.")
+            ),
+            DT::DTOutput(ns("tab_inventario_resumo")),
+            tags$hr(),
+            h5("Detalhamento de Arquivos"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Lista completa de arquivos coletados. Arquivos com períodos sobrepostos podem conter dados duplicados, ",
+                        "mas o sistema remove duplicatas automaticamente durante o processamento.")
+            ),
+            DT::DTOutput(ns("tab_inventario_detalhes")),
+            tags$hr(),
+            h5("Sobreposições Detectadas"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Arquivos que coletam o mesmo período (sobreposição). Isso é normal em coletas incrementais.")
+            ),
+            DT::DTOutput(ns("tab_inventario_sobreposicoes")),
+            tags$hr(),
+            h5("Gestão de Arquivos (Melhores Práticas)"),
+            tags$p(
+              class = "text-info",
+              tags$strong("Política de Retenção:"),
+              tags$br(),
+              tags$small("• Manter sempre: últimos 3 meses + arquivos não processados"),
+              tags$br(),
+              tags$small("• Consolidar em backup: arquivos antigos (>6 meses) já processados"),
+              tags$br(),
+              tags$small("• Nunca remover automaticamente - sempre fazer backup primeiro")
+            ),
+            actionButton(ns("btn_analisar_gestao"), "Analisar Arquivos", 
+                        class = "btn btn-sm btn-info", icon = icon("search")),
+            tags$br(), tags$br(),
+            DT::DTOutput(ns("tab_gestao_arquivos"))
+          )
         ),
-        tags$small("Use o intervalo para filtrar os meses. Meses fora do intervalo coletado aparecem como \"Fora do intervalo coletado\"."),
-        htmlOutput(ns("lacunas_info"))
-      ),
-      div(
-        class = "card-panel",
-        h4("Log da execução"),
-        verbatimTextOutput(ns("log_exec"))
+        
+        # Aba 3: Lacunas
+        tabPanel(
+          title = tagList(icon("calendar-times"), "Lacunas"),
+          div(
+            class = "card-panel",
+            h4("Lacunas por portal"),
+            fluidRow(
+              column(
+                width = 6,
+                selectInput(ns("portal_lacunas"), "Portal:", choices = "Selecione", width = "100%")
+              ),
+              column(
+                width = 6,
+                selectInput(ns("visualizacao_tipo"), "Visualização:", 
+                           choices = c("Tabela Mensal" = "tabela", "Calendário" = "calendario"),
+                           selected = "tabela", width = "100%")
+              )
+            ),
+            dateRangeInput(
+              ns("lacunas_range"),
+              "Intervalo:",
+              start = as.Date("2025-01-01"),
+              end   = Sys.Date(),
+              format = "dd/mm/yyyy",
+              language = "pt-BR",
+              width = "100%"
+            ),
+            tags$small("Use o intervalo para filtrar os meses. Meses fora do intervalo coletado aparecem como \"Fora do intervalo coletado\"."),
+            tags$hr(),
+            # Estatísticas de cobertura
+            uiOutput(ns("estatisticas_cobertura")),
+            tags$hr(),
+            h5("Meses sem dados (alerta)"),
+            tags$p(class = "text-muted", tags$small("Meses com zero dias coletados no intervalo selecionado.")),
+            DT::DTOutput(ns("tab_meses_sem_dados")),
+            tags$hr(),
+            # Visualização de calendário
+            conditionalPanel(
+              condition = paste0("input['", ns("visualizacao_tipo"), "'] == 'calendario'"),
+              h5("Visualização de Calendário"),
+              tags$p(class = "text-muted", 
+                    tags$small("Verde = Coletado | Vermelho = Faltando | Cinza = Fora do intervalo")),
+              DT::DTOutput(ns("tab_calendario_lacunas"))
+            ),
+            # Tabela mensal (padrão)
+            conditionalPanel(
+              condition = paste0("input['", ns("visualizacao_tipo"), "'] == 'tabela'"),
+              h5("Resumo Mensal"),
+              DT::DTOutput(ns("tab_lacunas_mensal"))
+            ),
+            tags$hr(),
+            # Períodos críticos
+            h5("Períodos Críticos (Lacunas Longas)"),
+            DT::DTOutput(ns("tab_periodos_criticos")),
+            tags$hr(),
+            # Sugestões Inteligentes de Coleta
+            h5("Sugestões Inteligentes de Coleta"),
+            tags$p(
+              class = "text-info",
+              tags$small("O sistema analisa lacunas e sugere períodos prioritários para coleta, ",
+                        "agrupando lacunas próximas e estimando tempo necessário.")
+            ),
+            fluidRow(
+              column(
+                width = 6,
+                actionButton(ns("btn_gerar_sugestoes"), "Gerar Sugestões", 
+                           class = "btn btn-primary", icon = icon("lightbulb"))
+              ),
+              column(
+                width = 6,
+                checkboxInput(ns("agrupar_sugestoes"), "Agrupar lacunas próximas", value = TRUE)
+              )
+            ),
+            tags$br(),
+            # Estratégia recomendada
+            uiOutput(ns("estrategia_coleta")),
+            tags$hr(),
+            # Tabela de sugestões
+            DT::DTOutput(ns("tab_sugestoes_coleta")),
+            tags$hr(),
+            # Análise de Cobertura Temporal
+            h5("Análise de Cobertura Temporal"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Evolução da cobertura ao longo do tempo e comparação entre portais.")
+            ),
+            plotly::plotlyOutput(ns("grafico_cobertura_temporal"), height = "400px"),
+            tags$hr(),
+            # Informações detalhadas (mantém o original - versão simplificada)
+            h5("Detalhamento Mensal (Legado)"),
+            htmlOutput(ns("lacunas_info"))
+          )
+        ),
+        
+        # Aba 5: Métricas e KPIs
+        tabPanel(
+          title = tagList(icon("chart-bar"), "Métricas"),
+          div(
+            class = "card-panel",
+            h4("Dashboard de Métricas e KPIs"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Indicadores principais de cobertura e qualidade dos dados.")
+            ),
+            tags$hr(),
+            # KPIs principais
+            uiOutput(ns("kpis_principais")),
+            tags$hr(),
+            # Métricas por portal
+            h5("Métricas por Portal"),
+            DT::DTOutput(ns("tab_metricas_portal")),
+            tags$hr(),
+            # Métricas de qualidade
+            h5("Qualidade dos Dados"),
+            uiOutput(ns("metricas_qualidade")),
+            tags$hr(),
+            # Comparação entre portais
+            h5("Comparação entre Portais"),
+            plotly::plotlyOutput(ns("grafico_comparacao_portais"), height = "300px")
+          )
+        ),
+        
+        # Aba 6: Relatórios e Exportação
+        tabPanel(
+          title = tagList(icon("file-export"), "Relatórios"),
+          div(
+            class = "card-panel",
+            h4("Exportação de Relatórios e Alertas"),
+            tags$p(
+              class = "text-muted",
+              tags$small("Gere relatórios e verifique alertas de lacunas críticas.")
+            ),
+            tags$hr(),
+            # Alertas
+            h5("Alertas de Lacunas Críticas"),
+            uiOutput(ns("alertas_lacunas")),
+            tags$br(),
+            DT::DTOutput(ns("tab_alertas_lacunas")),
+            tags$hr(),
+            # Exportação
+            h5("Exportar Relatórios"),
+            fluidRow(
+              column(
+                width = 6,
+                selectInput(ns("formato_exportacao"), "Formato:", 
+                           choices = c("CSV" = "csv", "Excel (em breve)" = "excel"),
+                           selected = "csv", width = "100%")
+              ),
+              column(
+                width = 6,
+                actionButton(ns("btn_exportar_relatorio"), "Exportar Relatório", 
+                           class = "btn btn-primary", icon = icon("download"))
+              )
+            ),
+            tags$br(),
+            uiOutput(ns("status_exportacao")),
+            tags$hr(),
+            # Histórico de coletas
+            h5("Histórico de Coletas"),
+            DT::DTOutput(ns("tab_historico_coletas"))
+          )
+        ),
+        
+        # Aba 4: Log
+        tabPanel(
+          title = tagList(icon("file-alt"), "Log"),
+          div(
+            class = "card-panel",
+            h4("Log da execução"),
+            verbatimTextOutput(ns("log_exec"))
+          )
+        )
       )
     )
+  )
   )
 }
 
@@ -116,6 +348,70 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       )[order(info$mtime, decreasing = TRUE), , drop = FALSE]
     }
     set_status_details("idle", "Pronto para iniciar coleta.", NULL)
+    
+    # Carregar funções de inventário, gestão e visualização
+    if (file.exists("R/inventario_coleta.R")) {
+      source("R/inventario_coleta.R", local = TRUE)
+    }
+    if (file.exists("R/gestao_arquivos_raw.R")) {
+      source("R/gestao_arquivos_raw.R", local = TRUE)
+    }
+    if (file.exists("R/visualizacao_lacunas.R")) {
+      source("R/visualizacao_lacunas.R", local = TRUE)
+    }
+    if (file.exists("R/sugestoes_coleta.R")) {
+      source("R/sugestoes_coleta.R", local = TRUE)
+    }
+    if (file.exists("R/analise_cobertura_temporal.R")) {
+      source("R/analise_cobertura_temporal.R", local = TRUE)
+    }
+    if (file.exists("R/dashboard_metricas.R")) {
+      source("R/dashboard_metricas.R", local = TRUE)
+    }
+    if (file.exists("R/exportacao_relatorios.R")) {
+      source("R/exportacao_relatorios.R", local = TRUE)
+    }
+    
+    # Reactive para sugestões
+    sugestoes_coleta <- reactiveVal(NULL)
+    
+    # Reactive para análise de gestão
+    analise_gestao <- reactiveVal(NULL)
+    
+    # Reactive para inventário
+    inventario_raw <- reactiveVal(NULL)
+    inventario_atualizar <- reactiveVal(0)
+    
+    # Função para atualizar inventário
+    atualizar_inventario <- function() {
+      dados_proc <- dados_enr()
+      dir_raw <- if (exists("DIR_RAW", inherits = TRUE)) {
+        get("DIR_RAW", inherits = TRUE)
+      } else {
+        file.path("data", "raw")
+      }
+      
+      inventario <- tryCatch({
+        inventariar_arquivos_raw(dir_raw = dir_raw, dados_processados = dados_proc)
+      }, error = function(e) {
+        message("Erro ao inventariar arquivos: ", e$message)
+        NULL
+      })
+      
+      inventario_raw(inventario)
+      inventario_atualizar(inventario_atualizar() + 1)
+    }
+    
+    # Atualizar inventário inicialmente e quando dados mudarem
+    observeEvent(dados_enr(), {
+      atualizar_inventario()
+    }, ignoreInit = FALSE)
+    
+    # Atualizar quando botão for clicado
+    observeEvent(input$btn_atualizar_inventario, {
+      atualizar_inventario()
+      showNotification("Inventário atualizado", type = "message")
+    })
 
     output$portais_status <- renderText(portais_status())
     output$storage_info <- renderUI({
@@ -526,6 +822,1028 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       updateDateRangeInput(session, "lacunas_range", start = portal_inicio, end = portal_fim)
     }, ignoreNULL = TRUE)
 
+    # Reactive para calendário de lacunas
+    calendario_lacunas <- reactive({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(NULL)
+      }
+      
+      portal_sel <- input$portal_lacunas
+      if (is.null(portal_sel) || portal_sel == "Selecione") {
+        return(NULL)
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        preparar_calendario_lacunas(
+          dados_processados = dados,
+          portal = portal_sel,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2])
+        )
+      }, error = function(e) {
+        message("Erro ao preparar calendário: ", e$message)
+        NULL
+      })
+    })
+    
+    # Output: Estatísticas de cobertura
+    output$estatisticas_cobertura <- renderUI({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(tags$div(class = "text-muted", "Selecione um portal e intervalo para ver estatísticas."))
+      }
+      
+      stats <- calcular_estatisticas_cobertura(calendario)
+      
+      tags$div(
+        class = "row",
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-primary", stats$total_dias),
+            tags$small("Total de Dias")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-success", stats$dias_coletados),
+            tags$small("Dias Coletados")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-danger", stats$dias_faltando),
+            tags$small("Dias Faltando")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(stats$cobertura_pct >= 80, "text-success", 
+                                 ifelse(stats$cobertura_pct >= 50, "text-warning", "text-danger")),
+                   sprintf("%.1f%%", stats$cobertura_pct)),
+            tags$small("Cobertura")
+          )
+        )
+      )
+    })
+    
+    # Output: Tabela de calendário (visualização dia a dia)
+    output$tab_calendario_lacunas <- DT::renderDT({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um portal e intervalo para ver o calendário."), rownames = FALSE))
+      }
+      
+      # Agrupar por mês para visualização
+      calendario_display <- calendario %>%
+        group_by(.data$mes_ano, .data$ano, .data$mes) %>%
+        summarise(
+          dias_total = n(),
+          dias_coletados = sum(.data$tem_dados),
+          dias_faltando = .data$dias_total - .data$dias_coletados,
+          cobertura_pct = round(100 * .data$dias_coletados / .data$dias_total, 1),
+          dias_lista = paste(
+            ifelse(.data$tem_dados, 
+                   sprintf("%02d", .data$dia), 
+                   sprintf("(%02d)", .data$dia)),
+            collapse = " "
+          ),
+          .groups = "drop"
+        ) %>%
+        arrange(desc(.data$ano), desc(.data$mes)) %>%
+        mutate(
+          status = case_when(
+            cobertura_pct == 100 ~ "Completo",
+            cobertura_pct >= 80 ~ "Quase completo",
+            cobertura_pct >= 50 ~ "Parcial",
+            cobertura_pct > 0 ~ "Incompleto",
+            TRUE ~ "Sem dados"
+          )
+        ) %>%
+        select(mes_ano, dias_total, dias_coletados, dias_faltando, cobertura_pct, status, dias_lista) %>%
+        rename(
+          "Mês" = mes_ano,
+          "Total" = dias_total,
+          "Coletados" = dias_coletados,
+          "Faltando" = dias_faltando,
+          "Cobertura %" = cobertura_pct,
+          "Status" = status,
+          "Dias (coletados) / (faltando)" = dias_lista
+        )
+      
+      DT::datatable(
+        calendario_display,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 12,
+          scrollX = TRUE,
+          order = list(list(0, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Status",
+                       backgroundColor = DT::styleEqual(
+                         c("Completo", "Quase completo", "Parcial", "Incompleto", "Sem dados"),
+                         c("#ccffcc", "#e6ffcc", "#fff4cc", "#ffe6cc", "#ffcccc")
+                       )) %>%
+        DT::formatStyle("Cobertura %",
+                       backgroundColor = DT::styleInterval(
+                         c(50, 80, 100),
+                         c("#ffcccc", "#fff4cc", "#e6ffcc", "#ccffcc")
+                       ))
+    })
+    
+    # Reactive para calendário de lacunas
+    calendario_lacunas <- reactive({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(NULL)
+      }
+      
+      portal_sel <- input$portal_lacunas
+      if (is.null(portal_sel) || portal_sel == "Selecione") {
+        return(NULL)
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        preparar_calendario_lacunas(
+          dados_processados = dados,
+          portal = portal_sel,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2])
+        )
+      }, error = function(e) {
+        message("Erro ao preparar calendário: ", e$message)
+        NULL
+      })
+    })
+    
+    # Output: Estatísticas de cobertura
+    output$estatisticas_cobertura <- renderUI({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(tags$div(class = "text-muted", "Selecione um portal e intervalo para ver estatísticas."))
+      }
+      
+      stats <- calcular_estatisticas_cobertura(calendario)
+      
+      tags$div(
+        class = "row",
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-primary", stats$total_dias),
+            tags$small("Total de Dias")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-success", stats$dias_coletados),
+            tags$small("Dias Coletados")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = "text-danger", stats$dias_faltando),
+            tags$small("Dias Faltando")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(stats$cobertura_pct >= 80, "text-success", 
+                                 ifelse(stats$cobertura_pct >= 50, "text-warning", "text-danger")),
+                   sprintf("%.1f%%", stats$cobertura_pct)),
+            tags$small("Cobertura")
+          )
+        )
+      )
+    })
+    
+    # Output: Tabela de calendário (visualização dia a dia)
+    output$tab_calendario_lacunas <- DT::renderDT({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um portal e intervalo para ver o calendário."), rownames = FALSE))
+      }
+      
+      # Agrupar por mês para visualização
+      calendario_display <- calendario %>%
+        group_by(.data$mes_ano, .data$ano, .data$mes) %>%
+        summarise(
+          dias_total = n(),
+          dias_coletados = sum(.data$tem_dados),
+          dias_faltando = .data$dias_total - .data$dias_coletados,
+          cobertura_pct = round(100 * .data$dias_coletados / .data$dias_total, 1),
+          dias_lista = paste(
+            ifelse(.data$tem_dados, 
+                   sprintf("%02d", .data$dia), 
+                   sprintf("(%02d)", .data$dia)),
+            collapse = " "
+          ),
+          .groups = "drop"
+        ) %>%
+        arrange(desc(.data$ano), desc(.data$mes)) %>%
+        mutate(
+          status = case_when(
+            cobertura_pct == 100 ~ "Completo",
+            cobertura_pct >= 80 ~ "Quase completo",
+            cobertura_pct >= 50 ~ "Parcial",
+            cobertura_pct > 0 ~ "Incompleto",
+            TRUE ~ "Sem dados"
+          )
+        ) %>%
+        select(mes_ano, dias_total, dias_coletados, dias_faltando, cobertura_pct, status, dias_lista) %>%
+        rename(
+          "Mês" = mes_ano,
+          "Total" = dias_total,
+          "Coletados" = dias_coletados,
+          "Faltando" = dias_faltando,
+          "Cobertura %" = cobertura_pct,
+          "Status" = status,
+          "Dias (coletados) / (faltando)" = dias_lista
+        )
+      
+      DT::datatable(
+        calendario_display,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 12,
+          scrollX = TRUE,
+          order = list(list(0, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Status",
+                       backgroundColor = DT::styleEqual(
+                         c("Completo", "Quase completo", "Parcial", "Incompleto", "Sem dados"),
+                         c("#ccffcc", "#e6ffcc", "#fff4cc", "#ffe6cc", "#ffcccc")
+                       )) %>%
+        DT::formatStyle("Cobertura %",
+                       backgroundColor = DT::styleInterval(
+                         c(50, 80, 100),
+                         c("#ffcccc", "#fff4cc", "#e6ffcc", "#ccffcc")
+                       ))
+    })
+    
+    # Output: Resumo mensal de lacunas
+    output$tab_lacunas_mensal <- DT::renderDT({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um portal e intervalo para ver o resumo mensal."), rownames = FALSE))
+      }
+      
+      resumo_mensal <- resumir_lacunas_mensal(calendario) %>%
+        select(mes_ano, dias_total, dias_coletados, dias_faltando, cobertura_pct, status_mes) %>%
+        rename(
+          "Mês" = mes_ano,
+          "Total" = dias_total,
+          "Coletados" = dias_coletados,
+          "Faltando" = dias_faltando,
+          "Cobertura %" = cobertura_pct,
+          "Status" = status_mes
+        )
+      
+      DT::datatable(
+        resumo_mensal,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 12,
+          scrollX = TRUE,
+          order = list(list(0, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Status",
+                       backgroundColor = DT::styleEqual(
+                         c("Completo", "Quase completo", "Parcial", "Incompleto", "Sem dados"),
+                         c("#ccffcc", "#e6ffcc", "#fff4cc", "#ffe6cc", "#ffcccc")
+                       )) %>%
+        DT::formatStyle("Cobertura %",
+                      backgroundColor = DT::styleInterval(
+                        c(50, 80, 100),
+                        c("#ffcccc", "#fff4cc", "#e6ffcc", "#ccffcc")
+                      ))
+    })
+
+    # Output: Meses sem dados (alerta)
+    output$tab_meses_sem_dados <- DT::renderDT({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um portal e intervalo para ver meses sem dados."), rownames = FALSE))
+      }
+
+      resumo_mensal <- resumir_lacunas_mensal(calendario)
+      sem_dados <- resumo_mensal %>%
+        filter(.data$dias_coletados == 0) %>%
+        select(mes_ano, dias_total) %>%
+        rename("Mês" = mes_ano, "Dias no mês" = dias_total)
+
+      if (nrow(sem_dados) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum mês sem dados no intervalo selecionado."), rownames = FALSE))
+      }
+
+      DT::datatable(
+        sem_dados,
+        rownames = FALSE,
+        options = list(
+          paging = FALSE,
+          searching = FALSE,
+          info = FALSE
+        )
+      )
+    })
+    
+    # Output: Períodos críticos
+    output$tab_periodos_criticos <- DT::renderDT({
+      calendario <- calendario_lacunas()
+      if (is.null(calendario) || nrow(calendario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um portal e intervalo para ver períodos críticos."), rownames = FALSE))
+      }
+      
+      periodos <- identificar_periodos_criticos(calendario, min_dias_sequencia = 7)
+      
+      if (nrow(periodos) == 0) {
+        return(DT::datatable(
+          tibble(Mensagem = "Nenhum período crítico detectado (lacunas de 7+ dias consecutivos)."), 
+          rownames = FALSE
+        ))
+      }
+      
+      periodos_display <- periodos %>%
+        select(periodo, dias_sequencia, criticidade) %>%
+        rename(
+          "Período" = periodo,
+          "Dias Consecutivos" = dias_sequencia,
+          "Criticidade" = criticidade
+        )
+      
+      DT::datatable(
+        periodos_display,
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(1, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Criticidade",
+                       backgroundColor = DT::styleEqual(
+                         c("Crítico", "Alto", "Médio"),
+                         c("#ffcccc", "#ffe6cc", "#fff4cc")
+                       ))
+    })
+    
+    # Observador para gerar sugestões
+    observeEvent(input$btn_gerar_sugestoes, {
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        showNotification("Nenhum dado disponível para gerar sugestões", type = "warning")
+        return()
+      }
+      
+      portal_sel <- input$portal_lacunas
+      if (is.null(portal_sel) || portal_sel == "Selecione") {
+        showNotification("Selecione um portal primeiro", type = "warning")
+        return()
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        showNotification("Selecione um intervalo de datas", type = "warning")
+        return()
+      }
+      
+      sugestoes <- tryCatch({
+        sugestoes_raw <- gerar_sugestoes_coleta(
+          dados_processados = dados,
+          portal = portal_sel,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2]),
+          max_sugestoes = 20
+        )
+        
+        if (isTRUE(input$agrupar_sugestoes) && nrow(sugestoes_raw) > 0) {
+          agrupar_sugestoes_proximas(sugestoes_raw, max_distancia_dias = 7)
+        } else {
+          sugestoes_raw
+        }
+      }, error = function(e) {
+        showNotification(paste("Erro ao gerar sugestões:", e$message), type = "error")
+        NULL
+      })
+      
+      if (!is.null(sugestoes)) {
+        sugestoes_coleta(sugestoes)
+        showNotification("Sugestões geradas com sucesso", type = "message")
+      }
+    })
+    
+    # Output: Estratégia de coleta
+    output$estrategia_coleta <- renderUI({
+      sugestoes <- sugestoes_coleta()
+      if (is.null(sugestoes) || nrow(sugestoes) == 0) {
+        return(tags$div(
+          class = "alert alert-info",
+          tags$strong("Instruções:"),
+          tags$p("Clique em 'Gerar Sugestões' para analisar lacunas e obter recomendações de coleta.")
+        ))
+      }
+      
+      estrategia <- sugerir_estrategia_coleta(sugestoes)
+      resumo <- calcular_resumo_sugestoes(sugestoes)
+      
+      cor_alerta <- switch(estrategia$estrategia,
+                          "Urgente" = "danger",
+                          "Importante" = "warning",
+                          "Manutenção" = "info",
+                          "success")
+      
+      tags$div(
+        class = sprintf("alert alert-%s", cor_alerta),
+        tags$h5(tags$strong(sprintf("Estratégia: %s", estrategia$estrategia))),
+        tags$p(estrategia$recomendacao),
+        tags$p(
+          tags$strong("Resumo: "),
+          sprintf("%d sugestões | %d dias faltando no total", 
+                 resumo$total_sugestoes, 
+                 resumo$total_dias)
+        ),
+        tags$hr(),
+        tags$p(tags$strong("Próximos passos:")),
+        tags$ul(
+          lapply(estrategia$proximos_passos, function(passo) {
+            tags$li(passo)
+          })
+        )
+      )
+    })
+    
+    # Output: Tabela de sugestões
+    output$tab_sugestoes_coleta <- DT::renderDT({
+      sugestoes <- sugestoes_coleta()
+      if (is.null(sugestoes) || nrow(sugestoes) == 0) {
+        return(DT::datatable(
+          tibble(Mensagem = "Clique em 'Gerar Sugestões' para ver recomendações de coleta."), 
+          rownames = FALSE
+        ))
+      }
+      
+      sugestoes_display <- sugestoes %>%
+        select(prioridade, periodo, `Dias Faltando`, motivo, estimativa_tempo) %>%
+        rename(
+          "Prioridade" = prioridade,
+          "Período Sugerido" = periodo,
+          "Dias" = `Dias Faltando`,
+          "Motivo" = motivo,
+          "Tempo Estimado" = estimativa_tempo
+        )
+      
+      DT::datatable(
+        sugestoes_display,
+        rownames = FALSE,
+        filter = "top",
+        selection = "single",
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(0, "asc"), list(2, "desc"))  # Ordenar por prioridade e dias
+        )
+      ) %>%
+        DT::formatStyle("Prioridade",
+                       backgroundColor = DT::styleEqual(
+                         c("Crítica", "Alta", "Média", "Baixa"),
+                         c("#ffcccc", "#ffe6cc", "#fff4cc", "#e6f3ff")
+                       ))
+    })
+    
+    # Observador para aplicar sugestão selecionada
+    observeEvent(input$tab_sugestoes_coleta_rows_selected, {
+      sugestoes <- sugestoes_coleta()
+      if (is.null(sugestoes) || nrow(sugestoes) == 0) return()
+      
+      linha_selecionada <- input$tab_sugestoes_coleta_rows_selected
+      if (length(linha_selecionada) == 0) return()
+      
+      sugestao_selecionada <- sugestoes[linha_selecionada, ]
+      
+      # Atualizar intervalo de coleta com a sugestão
+      updateDateRangeInput(
+        session,
+        "range",
+        start = sugestao_selecionada$data_inicio,
+        end = sugestao_selecionada$data_fim
+      )
+      
+      # Atualizar portal se necessário
+      portal_sel <- input$portal_lacunas
+      if (!is.null(portal_sel) && portal_sel != "Selecione") {
+        updateSelectInput(session, "portais", selected = portal_sel)
+      }
+      
+      showNotification(
+        sprintf("Intervalo atualizado para: %s", sugestao_selecionada$periodo),
+        type = "message"
+      )
+    })
+    
+    # Reactive para série temporal de cobertura
+    serie_temporal_cobertura <- reactive({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(NULL)
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        preparar_serie_temporal_cobertura(
+          dados_processados = dados,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2]),
+          agrupamento = "mes"
+        )
+      }, error = function(e) {
+        message("Erro ao preparar série temporal: ", e$message)
+        NULL
+      })
+    })
+    
+    # Output: Gráfico de cobertura temporal
+    output$grafico_cobertura_temporal <- plotly::renderPlotly({
+      serie <- serie_temporal_cobertura()
+      if (is.null(serie) || nrow(serie) == 0) {
+        return(plotly::plotly_empty() %>%
+               plotly::layout(title = "Selecione um intervalo para ver a análise temporal"))
+      }
+      
+      # Criar gráfico de linha
+      p <- serie %>%
+        plotly::plot_ly(
+          x = ~periodo,
+          y = ~cobertura_pct,
+          color = ~portal,
+          type = "scatter",
+          mode = "lines+markers",
+          hovertemplate = "<b>%{fullData.name}</b><br>%{x|%d/%m/%Y}<br>Cobertura: %{y:.1f}%<extra></extra>"
+        ) %>%
+        plotly::layout(
+          title = "Evolução da Cobertura ao Longo do Tempo",
+          xaxis = list(title = "Período"),
+          yaxis = list(title = "Cobertura (%)", range = c(0, 105)),
+          hovermode = "x unified",
+          legend = list(orientation = "h", y = -0.2)
+        )
+      
+      # Adicionar linha de referência (80% e 100%)
+      p <- p %>%
+        plotly::layout(
+          shapes = list(
+            list(
+              type = "line",
+              xref = "paper", x0 = 0, x1 = 1,
+              yref = "y", y0 = 80, y1 = 80,
+              line = list(color = "orange", dash = "dash")
+            ),
+            list(
+              type = "line",
+              xref = "paper", x0 = 0, x1 = 1,
+              yref = "y", y0 = 100, y1 = 100,
+              line = list(color = "green", dash = "dash")
+            )
+          ),
+          annotations = list(
+            list(
+              xref = "paper", x = 1, xanchor = "left",
+              yref = "y", y = 80,
+              text = "80% (Meta)",
+              showarrow = FALSE,
+              font = list(color = "orange")
+            ),
+            list(
+              xref = "paper", x = 1, xanchor = "left",
+              yref = "y", y = 100,
+              text = "100% (Ideal)",
+              showarrow = FALSE,
+              font = list(color = "green")
+            )
+          )
+        )
+      
+      p
+    })
+    
+    # Reactive para KPIs
+    kpis_cobertura <- reactive({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(NULL)
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        calcular_kpis_cobertura(
+          dados_processados = dados,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2])
+        )
+      }, error = function(e) {
+        message("Erro ao calcular KPIs: ", e$message)
+        NULL
+      })
+    })
+    
+    # Output: KPIs principais
+    output$kpis_principais <- renderUI({
+      kpis <- kpis_cobertura()
+      if (is.null(kpis)) {
+        return(tags$div(class = "text-muted", "Selecione um intervalo para ver os KPIs."))
+      }
+      
+      tags$div(
+        class = "row",
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h3(class = "text-primary", sprintf("%.1f%%", kpis$cobertura_media_geral)),
+            tags$small("Cobertura Média Geral")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h3(class = "text-success", kpis$total_dias_coletados),
+            tags$small("Dias Coletados")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h3(class = "text-info", format(kpis$total_registros, big.mark = ".", scientific = FALSE)),
+            tags$small("Total de Registros")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h3(class = "text-warning", kpis$portais_ativos),
+            tags$small("Portais Ativos")
+          )
+        )
+      )
+    })
+    
+    # Output: Métricas por portal
+    output$tab_metricas_portal <- DT::renderDT({
+      kpis <- kpis_cobertura()
+      if (is.null(kpis) || nrow(kpis$cobertura_media_por_portal) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Selecione um intervalo para ver as métricas."), rownames = FALSE))
+      }
+      
+      metricas <- kpis$cobertura_media_por_portal %>%
+        rename(
+          "Portal" = portal,
+          "Cobertura %" = cobertura_pct,
+          "Dias Coletados" = dias_coletados,
+          "Registros" = registros
+        )
+      
+      DT::datatable(
+        metricas,
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(1, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Cobertura %",
+                       backgroundColor = DT::styleInterval(
+                         c(50, 80, 100),
+                         c("#ffcccc", "#fff4cc", "#e6ffcc", "#ccffcc")
+                       ))
+    })
+    
+    # Output: Métricas de qualidade
+    output$metricas_qualidade <- renderUI({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(tags$div(class = "text-muted", "Nenhum dado disponível."))
+      }
+      
+      qualidade <- tryCatch({
+        calcular_metricas_qualidade(dados)
+      }, error = function(e) {
+        message("Erro ao calcular qualidade: ", e$message)
+        NULL
+      })
+      
+      if (is.null(qualidade)) {
+        return(tags$div(class = "text-muted", "Erro ao calcular métricas de qualidade."))
+      }
+      
+      tags$div(
+        class = "row",
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(qualidade$pct_com_titulo >= 95, "text-success", "text-warning"),
+                   sprintf("%.1f%%", qualidade$pct_com_titulo)),
+            tags$small("Com Título")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(qualidade$pct_com_texto >= 95, "text-success", "text-warning"),
+                   sprintf("%.1f%%", qualidade$pct_com_texto)),
+            tags$small("Com Texto")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(qualidade$pct_com_data >= 95, "text-success", "text-warning"),
+                   sprintf("%.1f%%", qualidade$pct_com_data)),
+            tags$small("Com Data")
+          )
+        ),
+        tags$div(
+          class = "col-md-3",
+          tags$div(
+            class = "well well-sm text-center",
+            tags$h4(class = ifelse(qualidade$registros_duplicados == 0, "text-success", "text-warning"),
+                   qualidade$registros_duplicados),
+            tags$small("Duplicados")
+          )
+        )
+      )
+    })
+    
+    # Output: Gráfico de comparação entre portais
+    output$grafico_comparacao_portais <- plotly::renderPlotly({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(plotly::plotly_empty() %>%
+               plotly::layout(title = "Selecione um intervalo para ver a comparação"))
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(plotly::plotly_empty())
+      }
+      
+      comparacao <- tryCatch({
+        comparar_portais(
+          dados_processados = dados,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2])
+        )
+      }, error = function(e) {
+        message("Erro ao comparar portais: ", e$message)
+        return(tibble())
+      })
+      
+      if (nrow(comparacao) == 0) {
+        return(plotly::plotly_empty() %>%
+               plotly::layout(title = "Nenhum dado disponível para comparação"))
+      }
+      
+      p <- comparacao %>%
+        plotly::plot_ly(
+          x = ~portal,
+          y = ~cobertura_pct,
+          type = "bar",
+          text = ~sprintf("%.1f%%", cobertura_pct),
+          textposition = "outside",
+          marker = list(
+            color = ~cobertura_pct,
+            colorscale = list(c(0, "#ffcccc"), c(0.5, "#fff4cc"), c(1, "#ccffcc")),
+            showscale = TRUE
+          )
+        ) %>%
+        plotly::layout(
+          title = "Cobertura por Portal",
+          xaxis = list(title = "Portal"),
+          yaxis = list(title = "Cobertura (%)", range = c(0, 105))
+        )
+      
+      p
+    })
+    
+    # Reactive para alertas
+    alertas_lacunas <- reactive({
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        return(NULL)
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        verificar_alertas_lacunas(
+          dados_processados = dados,
+          portal = NULL,
+          data_inicio = as.Date(range_sel[1]),
+          data_fim = as.Date(range_sel[2]),
+          limite_dias_critico = 7
+        )
+      }, error = function(e) {
+        message("Erro ao verificar alertas: ", e$message)
+        NULL
+      })
+    })
+    
+    # Output: Alertas de lacunas
+    output$alertas_lacunas <- renderUI({
+      alertas <- alertas_lacunas()
+      if (is.null(alertas) || alertas$total_alertas == 0) {
+        return(tags$div(
+          class = "alert alert-success",
+          tags$strong("✓ Nenhum alerta crítico!"),
+          tags$p("Não foram detectadas lacunas de 7+ dias consecutivos no período selecionado.")
+        ))
+      }
+      
+      cor_alerta <- ifelse(alertas$criticidade_alta > 0, "danger", "warning")
+      
+      tags$div(
+        class = sprintf("alert alert-%s", cor_alerta),
+        tags$strong(sprintf("⚠ %d alerta(s) detectado(s)", alertas$total_alertas)),
+        tags$p(sprintf("%d com criticidade alta ou crítica", alertas$criticidade_alta))
+      )
+    })
+    
+    # Output: Tabela de alertas
+    output$tab_alertas_lacunas <- DT::renderDT({
+      alertas <- alertas_lacunas()
+      if (is.null(alertas) || alertas$total_alertas == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum alerta crítico detectado."), rownames = FALSE))
+      }
+      
+      alertas_display <- alertas$alertas %>%
+        mutate(
+          periodo = sprintf("%s a %s", 
+                           format(data_inicio, "%d/%m/%Y"),
+                           format(data_fim, "%d/%m/%Y"))
+        ) %>%
+        select(portal, periodo, dias_consecutivos, criticidade) %>%
+        rename(
+          "Portal" = portal,
+          "Período" = periodo,
+          "Dias Consecutivos" = dias_consecutivos,
+          "Criticidade" = criticidade
+        )
+      
+      DT::datatable(
+        alertas_display,
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(2, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Criticidade",
+                       backgroundColor = DT::styleEqual(
+                         c("Crítica", "Alta", "Média"),
+                         c("#ffcccc", "#ffe6cc", "#fff4cc")
+                       ))
+    })
+    
+    # Observador para exportar relatório
+    observeEvent(input$btn_exportar_relatorio, {
+      dados <- dados_enr()
+      if (is.null(dados) || nrow(dados) == 0) {
+        showNotification("Nenhum dado disponível para exportar", type = "warning")
+        return()
+      }
+      
+      range_sel <- input$lacunas_range
+      if (is.null(range_sel) || any(is.na(range_sel))) {
+        showNotification("Selecione um intervalo de datas", type = "warning")
+        return()
+      }
+      
+      formato <- input$formato_exportacao
+      
+      if (formato == "csv") {
+        arquivo <- tryCatch({
+          gerar_relatorio_cobertura_csv(
+            dados_processados = dados,
+            inventario = inventario_raw(),
+            sugestoes = sugestoes_coleta(),
+            arquivo_saida = NULL,
+            data_inicio = as.Date(range_sel[1]),
+            data_fim = as.Date(range_sel[2])
+          )
+        }, error = function(e) {
+          showNotification(paste("Erro ao exportar:", e$message), type = "error")
+          NULL
+        })
+        
+        if (!is.null(arquivo)) {
+          showNotification(
+            sprintf("Relatório exportado com sucesso: %s", basename(arquivo)),
+            type = "message"
+          )
+        }
+      } else {
+        showNotification("Exportação para Excel ainda não implementada", type = "info")
+      }
+    })
+    
+    # Output: Status de exportação
+    output$status_exportacao <- renderUI({
+      # Placeholder - pode ser expandido para mostrar histórico de exportações
+      NULL
+    })
+    
+    # Output: Histórico de coletas
+    output$tab_historico_coletas <- DT::renderDT({
+      inventario <- inventario_raw()
+      if (is.null(inventario) || nrow(inventario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo coletado encontrado."), rownames = FALSE))
+      }
+      
+      historico <- tryCatch({
+        gerar_historico_coletas(inventario)
+      }, error = function(e) {
+        message("Erro ao gerar histórico: ", e$message)
+        return(tibble())
+      })
+      
+      if (nrow(historico) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum histórico disponível."), rownames = FALSE))
+      }
+      
+      historico_display <- historico %>%
+        mutate(
+          mes_label = sprintf("%s/%04d", sprintf("%02d", month(mes_coleta)), ano_coleta),
+          tamanho_total_mb = sprintf("%.2f MB", tamanho_total_mb)
+        ) %>%
+        select(portal, mes_label, n_coletas, total_registros_estimado, tamanho_total_mb) %>%
+        rename(
+          "Portal" = portal,
+          "Mês" = mes_label,
+          "Coletas" = n_coletas,
+          "Registros (est.)" = total_registros_estimado,
+          "Tamanho" = tamanho_total_mb
+        )
+      
+      DT::datatable(
+        historico_display,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 12,
+          scrollX = TRUE,
+          order = list(list(1, "desc"))
+        )
+      )
+    })
+
     output$lacunas_info <- renderUI({
       cache <- lacunas_cache()
       if (is.null(cache)) {
@@ -664,6 +1982,283 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
       )
     })
 
+    # Atualizar filtro de portal do inventário quando portais mudarem
+    observeEvent(input$portais, {
+      portais <- input$portais
+      if (!is.null(portais) && length(portais) > 0) {
+        choices <- c("Todos", portais)
+        updateSelectInput(session, "inventario_portal_filtro", choices = choices)
+      }
+    }, ignoreInit = TRUE)
+    
+    # Output: Resumo do inventário por portal
+    output$tab_inventario_resumo <- DT::renderDT({
+      inventario <- inventario_raw()
+      if (is.null(inventario) || nrow(inventario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo coletado encontrado."), rownames = FALSE))
+      }
+      
+      resumo <- resumir_inventario_por_portal(inventario)
+      if (nrow(resumo) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo válido encontrado."), rownames = FALSE))
+      }
+      
+      resumo_display <- resumo %>%
+        select(
+          portal,
+          periodo,
+          n_arquivos,
+          tamanho_total_mb,
+          dias_coletados_total,
+          n_processados,
+          n_nao_processados,
+          pct_processado,
+          ultima_coleta
+        ) %>%
+        mutate(
+          ultima_coleta = format(ultima_coleta, "%d/%m/%Y %H:%M"),
+          tamanho_total_mb = sprintf("%.2f MB", tamanho_total_mb),
+          pct_processado = sprintf("%.1f%%", pct_processado)
+        ) %>%
+        rename(
+          "Portal" = portal,
+          "Período" = periodo,
+          "Arquivos" = n_arquivos,
+          "Tamanho Total" = tamanho_total_mb,
+          "Dias Coletados" = dias_coletados_total,
+          "Processados" = n_processados,
+          "Não Processados" = n_nao_processados,
+          "% Processado" = pct_processado,
+          "Última Coleta" = ultima_coleta
+        )
+      
+      DT::datatable(
+        resumo_display,
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(8, "desc"))  # Ordenar por última coleta
+        )
+      ) %>%
+        DT::formatStyle("Processados", backgroundColor = DT::styleEqual(0, "#ffcccc")) %>%
+        DT::formatStyle("Não Processados", backgroundColor = DT::styleInterval(0, c("#ccffcc", "#ffffcc")))
+    })
+    
+    # Output: Detalhamento de arquivos do inventário
+    output$tab_inventario_detalhes <- DT::renderDT({
+      inventario <- inventario_raw()
+      if (is.null(inventario) || nrow(inventario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo coletado encontrado."), rownames = FALSE))
+      }
+      
+      # Aplicar filtro de portal
+      portal_filtro <- input$inventario_portal_filtro
+      inventario_filtrado <- inventario
+      if (!is.null(portal_filtro) && portal_filtro != "Todos") {
+        inventario_filtrado <- inventario_filtrado %>%
+          filter(portal == portal_filtro)
+      }
+      
+      if (nrow(inventario_filtrado) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo encontrado para o filtro selecionado."), rownames = FALSE))
+      }
+      
+      detalhes <- inventario_filtrado %>%
+        mutate(
+          periodo = sprintf("%s a %s", 
+                           format(data_inicio, "%d/%m/%Y"),
+                           format(data_fim, "%d/%m/%Y")),
+          tamanho_kb = sprintf("%.2f KB", tamanho_kb),
+          data_criacao = format(data_criacao, "%d/%m/%Y %H:%M"),
+          status_display = ifelse(processado, "✓ Processado", "○ Não processado")
+        ) %>%
+        select(
+          arquivo,
+          portal,
+          periodo,
+          data_inicio,
+          data_fim,
+          dias_coletados,
+          tamanho_kb,
+          data_criacao,
+          status_display
+        ) %>%
+        arrange(desc(data_criacao)) %>%
+        rename(
+          "Arquivo" = arquivo,
+          "Portal" = portal,
+          "Período" = periodo,
+          "Data Início" = data_inicio,
+          "Data Fim" = data_fim,
+          "Dias" = dias_coletados,
+          "Tamanho" = tamanho_kb,
+          "Data Criação" = data_criacao,
+          "Status" = status_display
+        )
+      
+      DT::datatable(
+        detalhes,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          order = list(list(7, "desc"))  # Ordenar por data de criação
+        )
+      ) %>%
+        DT::formatStyle("Status", 
+                       backgroundColor = DT::styleEqual("✓ Processado", "#ccffcc"))
+    })
+    
+    # Output: Sobreposições detectadas
+    output$tab_inventario_sobreposicoes <- DT::renderDT({
+      inventario <- inventario_raw()
+      if (is.null(inventario) || nrow(inventario) == 0) {
+        return(DT::datatable(tibble(Mensagem = "Nenhum arquivo coletado encontrado."), rownames = FALSE))
+      }
+      
+      sobreposicoes <- tryCatch({
+        detectar_sobreposicoes(inventario)
+      }, error = function(e) {
+        return(tibble())
+      })
+      
+      if (is.null(sobreposicoes) || nrow(sobreposicoes) == 0) {
+        return(DT::datatable(
+          tibble(Mensagem = "Nenhuma sobreposição detectada. Todos os arquivos têm períodos distintos."), 
+          rownames = FALSE
+        ))
+      }
+      
+      sobreposicoes_display <- sobreposicoes %>%
+        mutate(
+          periodo = sprintf("%s a %s", 
+                           format(data_inicio, "%d/%m/%Y"),
+                           format(data_fim, "%d/%m/%Y"))
+        ) %>%
+        select(
+          arquivo,
+          portal,
+          periodo,
+          data_inicio,
+          data_fim,
+          n_sobrepostos,
+          arquivos_sobrepostos
+        ) %>%
+        arrange(portal, desc(data_inicio)) %>%
+        rename(
+          "Arquivo" = arquivo,
+          "Portal" = portal,
+          "Período" = periodo,
+          "Data Início" = data_inicio,
+          "Data Fim" = data_fim,
+          "Nº Sobrepostos" = n_sobrepostos,
+          "Arquivos Sobrepostos" = arquivos_sobrepostos
+        )
+      
+      DT::datatable(
+        sobreposicoes_display,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          order = list(list(2, "asc"), list(3, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Nº Sobrepostos", 
+                       backgroundColor = DT::styleInterval(0, c("#ccffcc", "#fff4cc")))
+    })
+    
+    # Observador para análise de gestão
+    observeEvent(input$btn_analisar_gestao, {
+      inventario <- inventario_raw()
+      dados_proc <- dados_enr()
+      
+      if (is.null(inventario) || nrow(inventario) == 0) {
+        showNotification("Nenhum arquivo para analisar", type = "warning")
+        return()
+      }
+      
+      analise <- tryCatch({
+        analisar_arquivos_para_gestao(
+          inventario = inventario,
+          dados_processados = dados_proc,
+          dias_retencao = 180,  # 6 meses
+          manter_sempre_ultimos_meses = 3
+        )
+      }, error = function(e) {
+        showNotification(paste("Erro na análise:", e$message), type = "error")
+        NULL
+      })
+      
+      if (!is.null(analise)) {
+        analise_gestao(analise)
+        showNotification("Análise concluída", type = "message")
+      }
+    })
+    
+    # Output: Tabela de gestão de arquivos
+    output$tab_gestao_arquivos <- DT::renderDT({
+      analise <- analise_gestao()
+      if (is.null(analise)) {
+        return(DT::datatable(
+          tibble(Mensagem = "Clique em 'Analisar Arquivos' para ver recomendações de gestão."), 
+          rownames = FALSE
+        ))
+      }
+      
+      # Combinar manter e consolidar
+      manter_display <- analise$manter %>%
+        mutate(
+          periodo_display = sprintf("%s a %s", 
+                                   format(.data$data_inicio, "%d/%m/%Y"),
+                                   format(.data$data_fim, "%d/%m/%Y")),
+          tamanho_display = sprintf("%.2f KB", .data$tamanho_kb),
+          categoria = "Manter"
+        ) %>%
+        select(arquivo, portal, periodo_display, idade_dias, motivo, tamanho_display, categoria)
+      
+      consolidar_display <- analise$consolidar %>%
+        mutate(
+          periodo_display = sprintf("%s a %s", 
+                                   format(.data$data_inicio, "%d/%m/%Y"),
+                                   format(.data$data_fim, "%d/%m/%Y")),
+          tamanho_display = sprintf("%.2f KB", .data$tamanho_kb),
+          categoria = "Consolidar"
+        ) %>%
+        select(arquivo, portal, periodo_display, idade_dias, motivo, tamanho_display, categoria)
+      
+      gestao <- bind_rows(manter_display, consolidar_display) %>%
+        arrange(categoria, desc(idade_dias)) %>%
+        rename(
+          "Categoria" = categoria,
+          "Arquivo" = arquivo,
+          "Portal" = portal,
+          "Período" = periodo_display,
+          "Idade (dias)" = idade_dias,
+          "Motivo" = motivo,
+          "Tamanho" = tamanho_display
+        )
+      
+      DT::datatable(
+        gestao,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          order = list(list(0, "asc"), list(4, "desc"))
+        )
+      ) %>%
+        DT::formatStyle("Categoria",
+                       backgroundColor = DT::styleEqual(
+                         c("Manter", "Consolidar"),
+                         c("#ccffcc", "#fff4cc")
+                       ))
+    })
+
     log_txt <- reactiveVal("Aguardando execução.")
     output$log_exec <- renderText(log_txt())
 
@@ -779,6 +2374,9 @@ mod_controle_coleta_server <- function(id, dados_enr, dados_est) {
 
       if (!isTRUE(ok)) return()
 
+      # Atualizar inventário após coleta (arquivos raw foram criados)
+      atualizar_inventario()
+      
       if (isTRUE(input$rodar_pipeline)) {
         dados_enr(carregar_principal())
         dados_est(carregar_estaticos())

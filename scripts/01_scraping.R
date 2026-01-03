@@ -21,7 +21,8 @@ options(stringsAsFactors = FALSE)
 if (file.exists("R/paths.R")) source("R/paths.R")
 if (exists("crimes_am_set_paths")) crimes_am_set_paths()
 
-UA_NUPEC  <- "NUPEC-LAMAPP-MonitorCrimes/1.0 (uso academico, UFAM)"
+UA_NUPEC  <- "NUPEC-LAMAPP-MonitorCrimes/1.1 (+https://github.com/nupec-lamapp/crimes_am)"
+GET_CACHE <- new.env(parent = emptyenv())
 if (!exists("DIR_RAW", inherits = TRUE))  DIR_RAW  <- file.path("data", "raw")
 if (!exists("DIR_LOGS", inherits = TRUE)) DIR_LOGS <- "logs"
 LOG_TEXTO <- file.path(DIR_LOGS, "scraping.log")
@@ -30,6 +31,59 @@ if (!dir.exists(DIR_RAW)) dir.create(DIR_RAW, recursive = TRUE, showWarnings = F
 if (!dir.exists(DIR_LOGS)) dir.create(DIR_LOGS, recursive = TRUE, showWarnings = FALSE)
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
+get_max_paginas <- function(config, default_max) {
+  cfg_val <- config$max_paginas
+  env_val <- suppressWarnings(as.integer(Sys.getenv("CRIMES_AM_MAX_PAGINAS", "")))
+  max_paginas <- cfg_val %||% env_val %||% default_max
+  if (is.na(max_paginas) || max_paginas <= 0) max_paginas <- default_max
+  max_paginas
+}
+
+get_bool_env <- function(name, default = FALSE) {
+  val <- tolower(Sys.getenv(name, ""))
+  if (val %in% c("1", "true", "t", "yes", "y")) return(TRUE)
+  if (val %in% c("0", "false", "f", "no", "n")) return(FALSE)
+  default
+}
+
+get_incluir_sem_data <- function(config, default = TRUE) {
+  if (!is.null(config$incluir_sem_data)) return(isTRUE(config$incluir_sem_data))
+  get_bool_env("CRIMES_AM_INCLUIR_SEM_DATA", default)
+}
+
+parse_retry_after <- function(value) {
+  if (is.null(value) || is.na(value)) return(NA_real_)
+  value <- trimws(value)
+  if (grepl("^[0-9]+$", value)) return(as.numeric(value))
+  parsed <- suppressWarnings(lubridate::parse_date_time(
+    value,
+    orders = c("a, d b Y H:M:S z", "a, d b Y H:M:S", "Y-m-d H:M:S z", "Y-m-d H:M:S")
+  ))
+  if (is.na(parsed)) return(NA_real_)
+  wait <- as.numeric(difftime(parsed, Sys.time(), units = "secs"))
+  if (wait < 0) wait <- 0
+  wait
+}
+
+respeita_robots <- function(url, ua = UA_NUPEC) {
+  if (!get_bool_env("CRIMES_AM_RESPEITAR_ROBOTS", TRUE)) return(TRUE)
+  if (!requireNamespace("robotstxt", quietly = TRUE)) {
+    log_event("WARN", "[ROBOTS]", "Pacote robotstxt nao instalado; seguindo sem checagem.")
+    return(TRUE)
+  }
+  ok <- tryCatch(
+    robotstxt::paths_allowed(url, user_agent = ua),
+    error = function(e) {
+      log_event("WARN", "[ROBOTS]", "Falha ao consultar robots.txt:", e$message)
+      TRUE
+    }
+  )
+  if (!isTRUE(ok)) {
+    log_event("WARN", "[ROBOTS]", "Acesso bloqueado por robots.txt:", url)
+  }
+  isTRUE(ok)
+}
 
 log_event <- function(level = "INFO", ...) {
   msg <- paste(...)
@@ -51,8 +105,18 @@ fazer_get_seguro_v2 <- function(
   max_retries  = 3,
   backoff_base = 2,
   timeout_seg  = 30,
-  ua           = UA_NUPEC
+  ua           = UA_NUPEC,
+  usar_cache   = TRUE
 ) {
+  cache_key <- paste0(ua, "::", url)
+  if (usar_cache && exists(cache_key, envir = GET_CACHE, inherits = FALSE)) {
+    return(get(cache_key, envir = GET_CACHE))
+  }
+
+  if (!respeita_robots(url, ua)) {
+    return(NULL)
+  }
+
   tentativa <- 1
   repeat {
     Sys.sleep(runif(1, 0.8, 2.5))
@@ -80,11 +144,13 @@ fazer_get_seguro_v2 <- function(
     } else {
       status <- httr::status_code(resp)
       if (!httr::http_error(resp)) {
+        if (usar_cache) assign(cache_key, resp, envir = GET_CACHE)
         return(resp)
       }
 
       if (status %in% c(429, 500:599) && tentativa < max_retries) {
-        wait <- backoff_base ^ tentativa + runif(1, 0, 1)
+        retry_after <- parse_retry_after(httr::headers(resp)[["retry-after"]])
+        wait <- if (!is.na(retry_after)) retry_after else backoff_base ^ tentativa + runif(1, 0, 1)
         log_event(
           "WARN",
           "[GET_V2]",
@@ -103,39 +169,7 @@ fazer_get_seguro_v2 <- function(
 }
 
 fazer_get_seguro <- function(url) {
-  tryCatch({
-    Sys.sleep(runif(1, 0.8, 2.5))
-
-    resp <- httr::GET(
-      url,
-      httr::timeout(30),
-      httr::user_agent(UA_NUPEC),
-      httr::add_headers(
-        `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        `Accept-Language` = "pt-BR,pt;q=0.9,en;q=0.8",
-        `Cache-Control` = "no-cache",
-        `Pragma` = "no-cache"
-      )
-    )
-
-    status <- httr::status_code(resp)
-
-    if (status %in% c(429, 503)) {
-      log_event("WARN", "[HTTP]", status, "em", url, "- backoff aplicado.")
-      Sys.sleep(runif(1, 15, 30))
-      resp <- httr::GET(url, httr::timeout(30), httr::user_agent(UA_NUPEC))
-    }
-
-    if (httr::http_error(resp)) {
-      log_event("ERROR", "[HTTP]", status, "em", url)
-      return(NULL)
-    }
-
-    resp
-  }, error = function(e) {
-    log_event("ERROR", "[GET]", url, "->", e$message)
-    NULL
-  })
+  fazer_get_seguro_v2(url, max_retries = 2, backoff_base = 2, timeout_seg = 30)
 }
 
 coletores <- new.env(parent = emptyenv())
@@ -162,12 +196,59 @@ get_domain <- function(url) {
   m
 }
 
+coletar_datas_json <- function(obj) {
+  out <- character()
+  if (is.list(obj)) {
+    if (!is.null(obj$datePublished)) out <- c(out, obj$datePublished)
+    if (!is.null(obj$dateCreated)) out <- c(out, obj$dateCreated)
+    if (!is.null(obj$dateModified)) out <- c(out, obj$dateModified)
+    for (item in obj) {
+      out <- c(out, coletar_datas_json(item))
+    }
+  }
+  out
+}
+
+extrair_data_jsonld <- function(doc) {
+  if (!requireNamespace("jsonlite", quietly = TRUE)) return(NA_Date_)
+  nodes <- rvest::html_elements(doc, "script[type='application/ld+json']")
+  if (length(nodes) == 0) return(NA_Date_)
+  datas <- character()
+  for (node in nodes) {
+    txt <- rvest::html_text(node, trim = TRUE)
+    if (!nzchar(txt)) next
+    json <- tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE), error = function(e) NULL)
+    if (is.null(json)) next
+    datas <- c(datas, coletar_datas_json(json))
+  }
+  datas <- datas[!is.na(datas) & nzchar(datas)]
+  if (length(datas) == 0) return(NA_Date_)
+  parsed <- suppressWarnings(lubridate::parse_date_time(
+    datas,
+    orders = c("Y-m-d H:M:S", "Y-m-d\\TH:M:S", "Y-m-d H:M", "Y-m-d\\TH:M", "Y-m-d"),
+    tz = "UTC"
+  ))
+  parsed <- parsed[!is.na(parsed)]
+  if (length(parsed) == 0) return(NA_Date_)
+  as.Date(parsed[1])
+}
+
 extrair_data_publicacao <- function(doc) {
-  meta_nodes <- rvest::html_elements(doc, "meta[property='article:published_time']")
+  d <- extrair_data_jsonld(doc)
+  if (!is.na(d)) return(d)
+
+  meta_nodes <- rvest::html_elements(
+    doc,
+    "meta[property='article:published_time'], meta[name='pubdate'], meta[name='publish-date']"
+  )
   if (length(meta_nodes) > 0) {
     dt_attr <- rvest::html_attr(meta_nodes, "content")[1]
     if (!is.na(dt_attr) && dt_attr != "") {
-      d <- suppressWarnings(lubridate::ymd_hms(dt_attr, quiet = TRUE))
+      d <- suppressWarnings(lubridate::parse_date_time(
+        dt_attr,
+        orders = c("Y-m-d H:M:S", "Y-m-d\\TH:M:S", "Y-m-d H:M", "Y-m-d\\TH:M", "Y-m-d"),
+        tz = "UTC"
+      ))
       if (!is.na(d)) return(as.Date(d))
     }
   }
@@ -176,15 +257,40 @@ extrair_data_publicacao <- function(doc) {
   if (length(time_nodes) > 0) {
     dt_attr <- rvest::html_attr(time_nodes, "datetime")[1]
     if (!is.na(dt_attr) && dt_attr != "") {
-      d <- suppressWarnings(lubridate::ymd_hms(dt_attr, quiet = TRUE))
+      d <- suppressWarnings(lubridate::parse_date_time(
+        dt_attr,
+        orders = c("Y-m-d H:M:S", "Y-m-d\\TH:M:S", "Y-m-d H:M", "Y-m-d\\TH:M", "Y-m-d"),
+        tz = "UTC"
+      ))
+      if (!is.na(d)) return(as.Date(d))
+    }
+    txt_time <- rvest::html_text(time_nodes[1], trim = TRUE)
+    if (!is.na(txt_time) && txt_time != "") {
+      d <- suppressWarnings(lubridate::parse_date_time(txt_time, orders = c("d/m/Y", "Y-m-d")))
       if (!is.na(d)) return(as.Date(d))
     }
   }
 
+  cand_nodes <- rvest::html_elements(
+    doc,
+    "time, .date, .post-date, .entry-date, .updated, [class*='data'], [class*='date'], [id*='data'], [id*='date']"
+  )
+  if (length(cand_nodes) > 0) {
+    txt <- paste(rvest::html_text(cand_nodes, trim = TRUE), collapse = " ")
+    padrao <- stringr::str_extract(txt, "\\b(\\d{1,2}/\\d{1,2}/\\d{4})\\b")
+    if (!is.na(padrao)) {
+      d <- suppressWarnings(lubridate::dmy(padrao))
+      if (!is.na(d)) return(d)
+    }
+  }
+
   txt <- rvest::html_text(doc)
-  padrao <- stringr::str_extract(txt, "\\b(\\d{2}/\\d{2}/\\d{4})\\b")
-  if (!is.na(padrao)) {
-    d <- suppressWarnings(lubridate::dmy(padrao))
+  padrao <- stringr::str_match(
+    txt,
+    "(?i)(publicado em|publicada em|publicado|publicada|atualizado em|atualizada em|atualizado|atualizada).{0,40}?(\\d{1,2}/\\d{1,2}/\\d{4})"
+  )
+  if (!is.na(padrao[3])) {
+    d <- suppressWarnings(lubridate::dmy(padrao[3]))
     if (!is.na(d)) return(d)
   }
 
@@ -209,7 +315,7 @@ eh_crime_violento <- function(titulo) {
 
 coletar_acritica <- function(data_inicio, data_fim, config = list()) {
   base_url <- "https://www.acritica.com/policia"
-  max_paginas <- config$max_paginas %||% 120
+  max_paginas <- config$max_paginas %||% 20
 
   noticias_acumuladas <- list()
   pagina_atual <- 1
@@ -233,7 +339,7 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
 
     links_nodes <- rvest::html_elements(doc, "h3 a")
     if (length(links_nodes) == 0) {
-      log_event("INFO", sprintf("Nenhum link encontrado na p gina %d. Fim da pagina‡Æo.", pagina_atual))
+      log_event("INFO", sprintf("Nenhum link encontrado na pagina %d. Fim da paginacao.", pagina_atual))
       break
     }
 
@@ -311,13 +417,268 @@ coletar_acritica <- function(data_inicio, data_fim, config = list()) {
 
 registrar_coletor("acritica", coletar_acritica)
 
+# Versao robusta (parada antecipada) do coletor A Critica
+coletar_acritica_novo <- function(data_inicio, data_fim, config = list()) {
+  base_url <- "https://www.acritica.com/policia"
+  max_paginas <- config$max_paginas %||% 20
+
+  noticias_acumuladas <- list()
+  dominio <- get_domain(base_url)
+
+  log_event("INFO", sprintf("--- Iniciando busca em '%s' ---", base_url))
+
+  for (pagina_atual in seq_len(max_paginas)) {
+    url_listagem <- paste0(base_url, "?page=", pagina_atual)
+    log_event("DEBUG", sprintf(">> Processando pagina %d...", pagina_atual))
+
+    resp <- fazer_get_seguro(url_listagem)
+    if (is.null(resp)) {
+      log_event("ERROR", "[ACRITICA] Falha ao acessar listagem. Parando.")
+      break
+    }
+
+    pagina_html <- httr::content(resp, as = "text", encoding = "UTF-8")
+    doc <- xml2::read_html(pagina_html)
+
+    links_nodes <- rvest::html_elements(doc, "h3 a")
+    if (length(links_nodes) == 0) {
+      log_event("INFO", sprintf("Nenhum link encontrado na pagina %d. Fim da paginacao.", pagina_atual))
+      break
+    }
+
+    df_links <- tibble(
+      texto = rvest::html_text(links_nodes, trim = TRUE),
+      href  = rvest::html_attr(links_nodes, "href")
+    ) %>%
+      filter(!is.na(href), href != "") %>%
+      distinct(href, .keep_all = TRUE)
+
+    log_event("INFO", sprintf("Encontrados %d links na listagem.", nrow(df_links)))
+
+    n_antigos_na_pagina <- 0
+    n_processados_pagina <- 0
+    links_novos <- 0
+
+    for (i in seq_len(nrow(df_links))) {
+      link <- df_links$href[i]
+      tit  <- df_links$texto[i]
+
+      if (nchar(tit) < 15) next
+
+      if (!grepl("^https?://", link)) {
+        if (startsWith(link, "/")) {
+          link <- paste0(dominio, link)
+        } else {
+          next
+        }
+      }
+
+      resp_art <- fazer_get_seguro(link)
+      if (is.null(resp_art)) next
+
+      pag_art <- tryCatch(httr::content(resp_art, as = "text", encoding = "UTF-8"), error = function(e) "")
+      if (pag_art == "") next
+
+      doc_art  <- xml2::read_html(pag_art)
+      data_pub <- extrair_data_publicacao(doc_art)
+
+      n_processados_pagina <- n_processados_pagina + 1
+
+      if (is.na(data_pub)) next
+      if (data_pub > data_fim) next
+
+      if (data_pub < data_inicio) {
+        n_antigos_na_pagina <- n_antigos_na_pagina + 1
+        next
+      }
+
+      noticias_acumuladas[[length(noticias_acumuladas) + 1]] <- tibble(
+        portal          = "acritica",
+        data_publicacao = format(data_pub, "%Y-%m-%d"),
+        titulo          = normalizar(tit),
+        url             = link
+      )
+
+      log_event("DEBUG", sprintf("[GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+      links_novos <- links_novos + 1
+    }
+
+    if (n_processados_pagina > 0 && n_antigos_na_pagina == n_processados_pagina) {
+      log_event("INFO", sprintf("Todos os itens da pagina %d sao anteriores a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    if (links_novos == 0) {
+      log_event("INFO", sprintf("Nenhuma noticia nova na pagina %d (fora do intervalo). Parando.", pagina_atual))
+      break
+    }
+  }
+
+  if (length(noticias_acumuladas) == 0) {
+    log_event("WARN", "[ACRITICA] Nenhuma noticia encontrada no intervalo.")
+    return(tibble())
+  }
+
+  bind_rows(noticias_acumuladas) %>%
+    mutate(crime_violento = eh_crime_violento(titulo))
+}
+
+# Registrar novo coletor como padrao
+registrar_coletor("acritica", coletar_acritica_novo)
+
+# Coletor A Critica - override com parada antecipada limpa
+coletar_acritica_final <- function(data_inicio, data_fim, config = list()) {
+  base_url <- "https://www.acritica.com/policia"
+  max_paginas <- get_max_paginas(config, 20)
+  incluir_sem_data <- get_incluir_sem_data(config, TRUE)
+
+  noticias_acumuladas <- list()
+  dominio <- get_domain(base_url)
+
+  log_event("INFO", sprintf("--- Iniciando busca (final) em '%s' ---", base_url))
+
+  for (pagina_atual in seq_len(max_paginas)) {
+    url_listagem <- paste0(base_url, "?page=", pagina_atual)
+    log_event("DEBUG", sprintf(">> Processando pagina %d...", pagina_atual))
+
+    resp <- fazer_get_seguro(url_listagem)
+    if (is.null(resp)) {
+      log_event("ERROR", "[ACRITICA] Falha ao acessar listagem. Parando.")
+      break
+    }
+
+    pagina_html <- httr::content(resp, as = "text", encoding = "UTF-8")
+    doc <- xml2::read_html(pagina_html)
+
+    links_nodes <- rvest::html_elements(doc, "h3 a")
+    if (length(links_nodes) == 0) {
+      log_event("INFO", sprintf("Nenhum link encontrado na pagina %d. Fim da paginacao.", pagina_atual))
+      break
+    }
+
+    df_links <- tibble(
+      texto = rvest::html_text(links_nodes, trim = TRUE),
+      href  = rvest::html_attr(links_nodes, "href")
+    ) %>%
+      filter(!is.na(href), href != "") %>%
+      distinct(href, .keep_all = TRUE)
+
+    log_event("INFO", sprintf("Encontrados %d links na listagem.", nrow(df_links)))
+
+    n_processados_pagina <- 0
+    n_com_data <- 0
+    n_no_intervalo <- 0
+    n_depois_fim <- 0
+    n_antes_inicio <- 0
+    n_sem_data <- 0
+
+    for (i in seq_len(nrow(df_links))) {
+      link <- df_links$href[i]
+      tit  <- df_links$texto[i]
+
+      if (nchar(tit) < 15) next
+
+      if (!grepl("^https?://", link)) {
+        if (startsWith(link, "/")) {
+          link <- paste0(dominio, link)
+        } else {
+          next
+        }
+      }
+
+      resp_art <- fazer_get_seguro(link)
+      if (is.null(resp_art)) next
+
+      pag_art <- tryCatch(httr::content(resp_art, as = "text", encoding = "UTF-8"), error = function(e) "")
+      if (pag_art == "") next
+
+      doc_art  <- xml2::read_html(pag_art)
+      data_pub <- extrair_data_publicacao(doc_art)
+      n_processados_pagina <- n_processados_pagina + 1
+
+      if (is.na(data_pub)) {
+        n_sem_data <- n_sem_data + 1
+        if (incluir_sem_data) {
+          noticias_acumuladas[[length(noticias_acumuladas) + 1]] <- tibble(
+            portal                  = "acritica",
+            data_publicacao         = NA_character_,
+            data_publicacao_faltante = TRUE,
+            titulo                  = normalizar(tit),
+            url                     = link
+          )
+        }
+        next
+      }
+
+      n_com_data <- n_com_data + 1
+
+      if (data_pub > data_fim) {
+        n_depois_fim <- n_depois_fim + 1
+        next
+      }
+
+      if (data_pub < data_inicio) {
+        n_antes_inicio <- n_antes_inicio + 1
+        next
+      }
+
+      noticias_acumuladas[[length(noticias_acumuladas) + 1]] <- tibble(
+        portal          = "acritica",
+        data_publicacao = format(data_pub, "%Y-%m-%d"),
+        data_publicacao_faltante = FALSE,
+        titulo          = normalizar(tit),
+        url             = link
+      )
+
+      log_event("DEBUG", sprintf("[GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+      n_no_intervalo <- n_no_intervalo + 1
+    }
+
+    if (n_processados_pagina > 0) {
+      log_event(
+        "INFO",
+        sprintf(
+          "[ACRITICA] pagina=%d no_intervalo=%d depois_fim=%d antes_inicio=%d sem_data=%d",
+          pagina_atual, n_no_intervalo, n_depois_fim, n_antes_inicio, n_sem_data
+        )
+      )
+    }
+
+    if (n_com_data > 0 && n_antes_inicio == n_com_data) {
+      log_event("INFO", sprintf("[ACRITICA] Pagina %d esta toda anterior a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    if (n_com_data > 0 && n_no_intervalo == 0 && n_depois_fim > 0 && n_antes_inicio == 0) {
+      next
+    }
+
+    if (n_com_data > 0 && n_no_intervalo == 0 && n_depois_fim == 0 && n_antes_inicio > 0) {
+      log_event("INFO", sprintf("[ACRITICA] Ja passou do intervalo na pagina %d. Parando.", pagina_atual))
+      break
+    }
+  }
+
+  if (length(noticias_acumuladas) == 0) {
+    log_event("WARN", "[ACRITICA] Nenhuma noticia encontrada no intervalo.")
+    return(tibble())
+  }
+
+  bind_rows(noticias_acumuladas) %>%
+    mutate(crime_violento = eh_crime_violento(titulo))
+}
+
+# Override definitivo
+registrar_coletor("acritica", coletar_acritica_final)
+
 ############################################################
 # Coletor Em Tempo
 ############################################################
 
 coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
   base_url    <- "https://emtempo.com.br/category/policia/"
-  max_paginas <- config$max_paginas %||% 60
+  max_paginas <- get_max_paginas(config, 20)
+  incluir_sem_data <- get_incluir_sem_data(config, TRUE)
 
   noticias <- list()
   pagina_atual <- 1
@@ -365,7 +726,11 @@ coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
     log_event("INFO", sprintf("Encontrados %d links na listagem.", nrow(df_links)))
 
     n_antigos <- 0
+    n_depois_fim <- 0
+    n_sem_data <- 0
     n_processados <- 0
+    links_novos <- 0
+    n_com_data <- 0
 
     for (i in seq_len(nrow(df_links))) {
       link <- df_links$href[i]
@@ -392,8 +757,24 @@ coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
 
       n_processados <- n_processados + 1
 
-      if (is.na(data_pub)) next
-      if (data_pub > data_fim) next
+      if (is.na(data_pub)) {
+        n_sem_data <- n_sem_data + 1
+        if (incluir_sem_data) {
+          noticias[[length(noticias) + 1]] <- tibble(
+            portal                  = "emtempo",
+            data_publicacao         = NA_character_,
+            data_publicacao_faltante = TRUE,
+            titulo                  = normalizar(tit),
+            url                     = link
+          )
+        }
+        next
+      }
+      n_com_data <- n_com_data + 1
+      if (data_pub > data_fim) {
+        n_depois_fim <- n_depois_fim + 1
+        next
+      }
 
       if (data_pub < data_inicio) {
         n_antigos <- n_antigos + 1
@@ -403,15 +784,37 @@ coletar_emtempo <- function(data_inicio, data_fim, config = list()) {
       noticias[[length(noticias) + 1]] <- tibble(
         portal          = "emtempo",
         data_publicacao = format(data_pub, "%Y-%m-%d"),
+        data_publicacao_faltante = FALSE,
         titulo          = normalizar(tit),
         url             = link
       )
 
       log_event("DEBUG", sprintf("[GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+      links_novos <- links_novos + 1
     }
 
-    if (n_processados > 0 && n_antigos == n_processados) {
+    if (n_com_data > 0 && n_antigos == n_com_data) {
       log_event("INFO", sprintf("Itens da pagina %d sao anteriores a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    if (n_processados > 0) {
+      log_event(
+        "INFO",
+        sprintf(
+          "[EMTEMPO] pagina=%d no_intervalo=%d depois_fim=%d antes_inicio=%d sem_data=%d",
+          pagina_atual, links_novos, n_depois_fim, n_antigos, n_sem_data
+        )
+      )
+    }
+
+    if (links_novos == 0 && n_com_data > 0 && n_depois_fim > 0 && n_antigos == 0) {
+      pagina_atual <- pagina_atual + 1
+      next
+    }
+
+    if (links_novos == 0 && n_com_data > 0 && n_depois_fim == 0 && n_antigos > 0) {
+      log_event("INFO", sprintf("[EMTEMPO] Ja passou do intervalo na pagina %d. Parando.", pagina_atual))
       break
     }
 
@@ -435,18 +838,19 @@ registrar_coletor("emtempo", coletar_emtempo)
 
 parse_pubdate_g1 <- function(txt) {
   if (is.null(txt) || length(txt) == 0) return(NA_Date_)
-  parsed <- suppressWarnings(
+  parsed <- suppressWarnings(suppressMessages(
     lubridate::parse_date_time(
       txt,
       orders = c("a, d b Y H:M:S z", "d b Y H:M:S z", "Y-m-d H:M:S"),
       tz = "UTC"
     )
-  )
+  ))
   as.Date(parsed)
 }
 
 coletar_g1_amazonas <- function(data_inicio, data_fim, config = list()) {
   feed_url <- config$feed_url %||% "https://g1.globo.com/rss/g1/am/amazonas/"
+  incluir_sem_data <- get_incluir_sem_data(config, TRUE)
 
   log_event("INFO", sprintf("--- Iniciando busca em '%s' ---", feed_url))
 
@@ -494,12 +898,19 @@ coletar_g1_amazonas <- function(data_inicio, data_fim, config = list()) {
         url
       )
     ) %>%
-    filter(
-      !is.na(data_publicacao),
-      grepl("g1\\.globo\\.com/am/amazonas", url)
-    ) %>%
-    distinct(url, .keep_all = TRUE) %>%
-    filter(data_publicacao >= data_inicio, data_publicacao <= data_fim)
+    filter(grepl("g1\\.globo\\.com/am/amazonas", url)) %>%
+    distinct(url, .keep_all = TRUE)
+
+  if (incluir_sem_data) {
+    noticias <- noticias %>%
+      filter(is.na(data_publicacao) |
+               (data_publicacao >= data_inicio & data_publicacao <= data_fim))
+  } else {
+    noticias <- noticias %>%
+      filter(!is.na(data_publicacao),
+             data_publicacao >= data_inicio,
+             data_publicacao <= data_fim)
+  }
 
   if (nrow(noticias) == 0) {
     log_event("WARN", "[G1_AM] Feed nao trouxe noticias no intervalo.")
@@ -510,7 +921,12 @@ coletar_g1_amazonas <- function(data_inicio, data_fim, config = list()) {
 
   noticias %>%
     mutate(
-      data_publicacao = format(data_publicacao, "%Y-%m-%d"),
+      data_publicacao_faltante = is.na(data_publicacao),
+      data_publicacao = dplyr::if_else(
+        is.na(data_publicacao),
+        NA_character_,
+        format(data_publicacao, "%Y-%m-%d")
+      ),
       crime_violento  = eh_crime_violento(titulo)
     )
 }
@@ -523,13 +939,13 @@ registrar_coletor("g1_amazonas", coletar_g1_amazonas)
 
 parse_pubdate_d24 <- function(txt) {
   if (is.null(txt) || length(txt) == 0) return(NA_Date_)
-  parsed <- suppressWarnings(
+  parsed <- suppressWarnings(suppressMessages(
     lubridate::parse_date_time(
       txt,
       orders = c("a, d b Y H:M:S z", "d b Y H:M:S z", "Y-m-d H:M:S"),
       tz = "America/Manaus"
     )
-  )
+  ))
   as.Date(parsed)
 }
 
@@ -576,7 +992,7 @@ extrair_data_publicacao_d24 <- function(doc) {
   converter_data_ptbr(texto)
 }
 
-coletar_d24am_feed <- function(data_inicio, data_fim, feed_urls) {
+coletar_d24am_feed <- function(data_inicio, data_fim, feed_urls, incluir_sem_data = TRUE) {
   feed_doc <- NULL
   feed_usado <- NULL
 
@@ -619,12 +1035,21 @@ coletar_d24am_feed <- function(data_inicio, data_fim, feed_urls) {
       titulo          = normalizar(titulo),
       url             = link
     )
-  }) %>%
-    filter(!is.na(data_publicacao))
+  })
 
   noticias <- noticias %>%
-    distinct(url, .keep_all = TRUE) %>%
-    filter(data_publicacao >= data_inicio, data_publicacao <= data_fim)
+    distinct(url, .keep_all = TRUE)
+
+  if (incluir_sem_data) {
+    noticias <- noticias %>%
+      filter(is.na(data_publicacao) |
+               (data_publicacao >= data_inicio & data_publicacao <= data_fim))
+  } else {
+    noticias <- noticias %>%
+      filter(!is.na(data_publicacao),
+             data_publicacao >= data_inicio,
+             data_publicacao <= data_fim)
+  }
 
   if (nrow(noticias) == 0) {
     log_event("WARN", "[D24AM] Feed nao trouxe noticias no intervalo (", feed_usado, ").")
@@ -632,12 +1057,22 @@ coletar_d24am_feed <- function(data_inicio, data_fim, feed_urls) {
   }
 
   log_event("INFO", sprintf("[D24AM][FEED] %d noticias obtidas (%s).", nrow(noticias), feed_usado))
-  noticias %>% mutate(crime_violento = eh_crime_violento(titulo))
+  noticias %>%
+    mutate(
+      data_publicacao_faltante = is.na(data_publicacao),
+      data_publicacao = dplyr::if_else(
+        is.na(data_publicacao),
+        NA_character_,
+        format(data_publicacao, "%Y-%m-%d")
+      ),
+      crime_violento = eh_crime_violento(titulo)
+    )
 }
 
 coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
   base_url    <- "https://d24am.com/policia/"
-  max_paginas <- config$max_paginas %||% 40
+  max_paginas <- get_max_paginas(config, 20)
+  incluir_sem_data <- get_incluir_sem_data(config, TRUE)
 
   noticias <- list()
   pagina_atual <- 1
@@ -674,6 +1109,9 @@ coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
       "article h2 a, article h3 a, article .entry-title a, .td-module-thumb > a, .td-block-span6 a"
     )
     if (length(links_nodes) == 0) {
+      links_nodes <- rvest::html_elements(doc, "a[href*='d24am.com']")
+    }
+    if (length(links_nodes) == 0) {
       log_event("INFO", sprintf("[D24AM] Nenhum link encontrado na pagina %d. Encerrando.", pagina_atual))
       break
     }
@@ -686,11 +1124,15 @@ coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
       mutate(
         href = dplyr::if_else(startsWith(href, "/"), paste0(dominio, href), href)
       ) %>%
-      filter(grepl("d24am\\.com", href)) %>%
+      filter(grepl("d24am\\.com", href), grepl("/policia", href)) %>%
       distinct(href, .keep_all = TRUE)
 
     n_processados <- 0
     n_antigos <- 0
+    n_depois_fim <- 0
+    n_sem_data <- 0
+    links_novos <- 0
+    n_com_data <- 0
 
     for (i in seq_len(nrow(df_links))) {
       link <- df_links$href[i]
@@ -709,8 +1151,24 @@ coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
       data_pub <- extrair_data_publicacao_d24(doc_art)
       n_processados <- n_processados + 1
 
-      if (is.na(data_pub)) next
-      if (data_pub > data_fim) next
+      if (is.na(data_pub)) {
+        n_sem_data <- n_sem_data + 1
+        if (incluir_sem_data) {
+          noticias[[length(noticias) + 1]] <- tibble(
+            portal                  = "d24am",
+            data_publicacao         = NA_character_,
+            data_publicacao_faltante = TRUE,
+            titulo                  = normalizar(tit),
+            url                     = link
+          )
+        }
+        next
+      }
+      n_com_data <- n_com_data + 1
+      if (data_pub > data_fim) {
+        n_depois_fim <- n_depois_fim + 1
+        next
+      }
       if (data_pub < data_inicio) {
         n_antigos <- n_antigos + 1
         next
@@ -719,14 +1177,36 @@ coletar_d24am_listagem <- function(data_inicio, data_fim, config = list()) {
       noticias[[length(noticias) + 1]] <- tibble(
         portal          = "d24am",
         data_publicacao = format(data_pub, "%Y-%m-%d"),
+        data_publicacao_faltante = FALSE,
         titulo          = normalizar(tit),
         url             = link
       )
       log_event("DEBUG", sprintf("[D24AM][GUARDADO] %s - %s...", data_pub, substring(tit, 1, 60)))
+      links_novos <- links_novos + 1
     }
 
-    if (n_processados > 0 && n_antigos == n_processados) {
+    if (n_com_data > 0 && n_antigos == n_com_data) {
       log_event("INFO", sprintf("[D24AM] Artigos da pagina %d sao anteriores a %s. Parando.", pagina_atual, data_inicio))
+      break
+    }
+
+    if (n_processados > 0) {
+      log_event(
+        "INFO",
+        sprintf(
+          "[D24AM] pagina=%d no_intervalo=%d depois_fim=%d antes_inicio=%d sem_data=%d",
+          pagina_atual, links_novos, n_depois_fim, n_antigos, n_sem_data
+        )
+      )
+    }
+
+    if (links_novos == 0 && n_com_data > 0 && n_depois_fim > 0 && n_antigos == 0) {
+      pagina_atual <- pagina_atual + 1
+      next
+    }
+
+    if (links_novos == 0 && n_com_data > 0 && n_depois_fim == 0 && n_antigos > 0) {
+      log_event("INFO", sprintf("[D24AM] Ja passou do intervalo na pagina %d. Parando.", pagina_atual))
       break
     }
 
@@ -747,7 +1227,8 @@ coletar_d24am <- function(data_inicio, data_fim, config = list()) {
     "https://d24am.com/policia/feed/",
     "https://d24am.com/category/policia/feed/"
   )
-  noticias <- coletar_d24am_feed(data_inicio, data_fim, feed_urls)
+  incluir_sem_data <- get_incluir_sem_data(config, TRUE)
+  noticias <- coletar_d24am_feed(data_inicio, data_fim, feed_urls, incluir_sem_data)
   if (nrow(noticias) > 0) return(noticias)
 
   log_event("WARN", "[D24AM] Tentando fallback via listagem HTML.")

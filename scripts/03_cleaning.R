@@ -143,6 +143,26 @@ clean_and_enrich_data <- function(df_parsed,
     )
   )
 
+  tipo_vulneravel <- classificar_crime_completo("Estupro de crianca")$tipo_principal
+  if (is.null(tipo_vulneravel) || is.na(tipo_vulneravel) || !nzchar(tipo_vulneravel)) {
+    tipo_vulneravel <- "Estupro de Vulneravel"
+  }
+  categoria_sexual <- dicionario_crimes$categoria[match("Estupro", dicionario_crimes$tipo_principal)]
+  if (length(categoria_sexual) == 0 || is.na(categoria_sexual)) {
+    categoria_sexual <- "Violencia Sexual"
+  }
+  if (!any(dicionario_crimes$tipo_principal == tipo_vulneravel)) {
+    dicionario_crimes <- bind_rows(
+      dicionario_crimes,
+      tibble(
+        categoria = categoria_sexual,
+        tipo_principal = tipo_vulneravel,
+        gravidade = "extrema",
+        descricao = "Estupro de crianca/adolescente"
+      )
+    )
+  }
+
   arq_dic <- file.path(dir_processed, "dicionario_tipos_crime.csv")
   readr::write_csv(dicionario_crimes, arq_dic)
   message("Dicionário de tipos de crime salvo em: ", arq_dic)
@@ -156,8 +176,13 @@ clean_and_enrich_data <- function(df_parsed,
     )
 
   arq_val <- file.path(dir_processed, "validacao_manual_tipos.csv")
+  if (!file.exists(arq_val)) {
   readr::write_csv(validacao_template, arq_val)
   message("Template de validação manual criado em: ", arq_val)
+
+  } else {
+    message("Template de validacao manual ja existe em: ", arq_val)
+  }
 
   df_final
 }

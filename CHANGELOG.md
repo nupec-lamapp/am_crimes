@@ -2,6 +2,23 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [0.0.9] - 2026-01-03
+
+### Adicionado
+- Artigo científico em `.Rmd` renderizado no app (com fallback quando `rmarkdown/pandoc` não estiver disponível).
+- Metadados de execução do pipeline (run id, parâmetros e variáveis de ambiente) registrados em JSON por run.
+- Orquestração opcional reprodutível via `targets` (`_targets.R`).
+
+### Atualizado
+- Scraper: `GET` robusto com `robots.txt` (quando disponível), suporte a `Retry-After`, cache por URL e user-agent com URL do repositório.
+- Deduplicação configurável por `CRIMES_AM_DEDUP_POR` (colunas) e janela parametrizada em `scripts/02_parse.R`.
+- Dashboard/relatórios: filtros mais explícitos e textos de contexto para interpretação dos indicadores.
+- Dependências: adiciona `robotstxt`, `jsonlite` e `targets` ao projeto.
+
+### Removido
+- `ArtigoWebSrapingSegurancapublica.md` (substituído por `ArtigoWebSrapingSegurancapublica.Rmd`).
+- Artefatos HTML versionados (outputs gerados localmente) e reorganização de scripts exploratórios para `legacy/`.
+
 ## [0.0.8] - 2025-12-29
 
 ### Atualizado

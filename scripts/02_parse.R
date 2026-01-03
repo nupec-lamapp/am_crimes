@@ -26,12 +26,25 @@ normalizar_para_dup <- function(titulo) {
   stringr::str_squish(titulo)
 }
 
-remover_duplicados_janela <- function(df, dias = 7) {
+remover_duplicados_janela <- function(df, dias = 7, dedup_por = c("portal", "titulo_norm")) {
   if (!"data_publicacao" %in% names(df)) return(df)
+  df <- df %>%
+    mutate(titulo_norm = normalizar_para_dup(titulo))
+
+  dedup_cols <- dedup_por
+  if (is.null(dedup_cols) || length(dedup_cols) == 0) dedup_cols <- "titulo_norm"
+  dedup_cols <- unique(dedup_cols)
+  missing_cols <- setdiff(dedup_cols, names(df))
+  if (length(missing_cols) > 0) {
+    warning("Colunas em dedup_por ausentes: ", paste(missing_cols, collapse = ", "),
+            ". Usando apenas colunas disponiveis.")
+    dedup_cols <- setdiff(dedup_cols, missing_cols)
+  }
+  if (length(dedup_cols) == 0) dedup_cols <- "titulo_norm"
+
   df %>%
-    mutate(titulo_norm = normalizar_para_dup(titulo)) %>%
-    arrange(titulo_norm, data_publicacao, portal, url) %>%
-    group_by(titulo_norm) %>%
+    arrange(across(all_of(dedup_cols)), data_publicacao, url) %>%
+    group_by(across(all_of(dedup_cols))) %>%
     mutate(
       diff_prev = as.numeric(difftime(data_publicacao, lag(data_publicacao), units = "days")),
       duplicado_janela = !is.na(diff_prev) & diff_prev <= dias
@@ -53,7 +66,7 @@ remover_duplicados_janela <- function(df, dias = 7) {
 # minimas e retorna um data.frame padronizado.
 ############################################################
 
-parse_raw_files <- function(dir_raw = DIR_RAW) {
+parse_raw_files <- function(dir_raw = DIR_RAW, dedup_dias = 7, dedup_por = c("portal", "titulo_norm")) {
   if (!dir.exists(dir_raw)) {
     stop("Diretorio data/raw/ nao encontrado (", dir_raw, "). Rode 01_scraping.R primeiro.")
   }
@@ -86,6 +99,12 @@ parse_raw_files <- function(dir_raw = DIR_RAW) {
 
   message("Total de registros brutos apos juncao/deduplicacao: ", nrow(df_raw))
 
-  remover_duplicados_janela(df_raw, dias = 7)
+  dedup_env <- Sys.getenv("CRIMES_AM_DEDUP_POR", unset = "")
+  if (nzchar(dedup_env)) {
+    dedup_por <- trimws(unlist(strsplit(dedup_env, ",")))
+    dedup_por <- dedup_por[dedup_por != ""]
+  }
+
+  remover_duplicados_janela(df_raw, dias = dedup_dias, dedup_por = dedup_por)
 }
 

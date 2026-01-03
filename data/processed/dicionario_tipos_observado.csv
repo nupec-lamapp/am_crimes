@@ -1,18 +1,18 @@
 categoria,tipo_principal,gravidade,n
-Outros,Não classificado com precisão,indefinida,1281
-Crime Letal Violento,Homicídio,extrema,426
-Crime Organizado,Tráfico de Drogas/Facções,alta,117
-Roubo Violento,Roubo/Assalto,alta,95
-Violência Sexual,Estupro,extrema,82
-Violência Sexual,Estupro de Vulnerável,extrema,55
-Violência Doméstica,Agressão Doméstica,alta,31
+Outros,Não classificado com precisão,indefinida,1334
+Crime Letal Violento,Homicídio,extrema,436
+Crime Organizado,Tráfico de Drogas/Facções,alta,123
+Roubo Violento,Roubo/Assalto,alta,96
+Violência Sexual,Estupro,extrema,84
+Violência Sexual,Estupro de Vulnerável,extrema,54
+Violência Doméstica,Agressão Doméstica,alta,34
 Privação de Liberdade,Sequestro/Cárcere Privado,muito alta,22
-Lesão Corporal Grave,Esfaqueamento,alta,17
+Lesão Corporal Grave,Esfaqueamento,alta,19
 Roubo Violento,Latrocínio,extrema,9
-Lesão Corporal Grave,Espancamento,alta,7
+Lesão Corporal Grave,Espancamento,alta,8
 Violência Lethal Contextual,Acerto de Contas,extrema,5
+Violência Sexual,Abuso Sexual,muito alta,5
 Lesão Corporal Grave,Agressão com Objeto,alta,4
-Violência Sexual,Abuso Sexual,muito alta,4
 Crime Letal Violento,Chacina,extrema,3
 Roubo Violento,Roubo à Mão Armada,muito alta,3
 Crime Letal Violento,Feminicídio,extrema,1

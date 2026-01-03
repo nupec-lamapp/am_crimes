@@ -69,5 +69,29 @@ Exemplo:
 set CRIMES_AM_WORKDIR=C:\temp\crimes_am
 ```
 
+## Deduplicacao de noticias
+
+A deduplicacao ocorre em `scripts/02_parse.R` em duas etapas:
+
+- `distinct(portal, data_publicacao, titulo, url)` remove duplicatas exatas.
+- `remover_duplicados_janela()` remove titulos repetidos em uma janela de dias
+  (padrao 7) usando titulo normalizado.
+
+O escopo de dedup pode ser ajustado por `dedup_por` (padrao `portal,titulo_norm`)
+ou via variavel de ambiente `CRIMES_AM_DEDUP_POR`.
+
+Exemplos (Windows):
+
+```sh
+# Dedup por portal + titulo (padrao)
+set CRIMES_AM_DEDUP_POR=portal,titulo_norm
+
+# Dedup entre portais (mesmo titulo)
+set CRIMES_AM_DEDUP_POR=titulo_norm
+```
+
+Se precisar ajustar a janela de dias, use `parse_raw_files(dedup_dias = N)`
+em uma execucao manual no R.
+
 
 

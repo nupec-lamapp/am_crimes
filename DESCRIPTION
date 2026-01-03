@@ -1,7 +1,7 @@
 Package: crimes_am
 Type: Shiny
 Title: Monitor de Crimes Violentos - Amazonas
-Version: 0.0.8
+Version: 0.0.9
 Author: NuPeC / LAMAPP
 Description: Sistema automatizado para monitoramento de noticias sobre crimes 
     violentos no Amazonas. Inclui pipeline de coleta (web scraping), 
@@ -25,14 +25,17 @@ Imports:
     stringi,
     fs (>= 1.6.0),
     httr,
+    robotstxt,
     rvest,
+    jsonlite,
     xml2,
     tidymodels,
     textrecipes,
     glue
 Suggests:
     testthat (>= 3.0.0),
-    rsconnect
+    rsconnect,
+    targets
 URL: https://github.com/nupec-lamapp/crimes_am
 BugReports: https://github.com/nupec-lamapp/crimes_am/issues
 Encoding: UTF-8

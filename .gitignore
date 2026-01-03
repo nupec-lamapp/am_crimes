@@ -21,20 +21,21 @@ renv/python/
 renv/local/
 
 # Dados (gerados)
-data/raw/
-data/
-data/exports/
+data/raw/*
+!data/raw/.gitkeep
+data/exports/*
+!data/exports/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
 # Mantem data/processed/ apenas para arquivos essenciais ja versionados
 
 # Logs
-logs/
+logs/*
 !logs/.gitkeep
 # Mantem estrutura de logs/ vazia, mas ignora conteudo
 
 # Outputs gerados
-outputs/
+outputs/*
 !outputs/.gitkeep
 # Arquivos gerados automaticamente pelo pipeline
 
@@ -49,6 +50,11 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .git\refs\heads\desktop.ini
+
+# Google Drive (atalhos/placeholders)
+*.gdoc
+*.gsheet
+*.gslides
 
 # Arquivos temporarios
 *.tmp
