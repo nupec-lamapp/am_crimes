@@ -276,3 +276,4 @@ gerar_historico_coletas <- function(inventario) {
 }
 
 
+

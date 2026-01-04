@@ -165,3 +165,4 @@ calcular_tendencia_cobertura <- function(serie_temporal) {
 }
 
 
+
