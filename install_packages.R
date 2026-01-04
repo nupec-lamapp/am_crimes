@@ -44,6 +44,7 @@ pacotes <- c(
   
   # ===== Web Scraping (Pipeline de Coleta) =====
   "httr",         # Cliente HTTP (scripts/01_scraping.R)
+  "robotstxt",    # robots.txt (scripts/01_scraping.R)
   "rvest",        # Web scraping (scripts/01_scraping.R)
   "xml2",         # Parsing XML/HTML (scripts/01_scraping.R)
   
@@ -53,6 +54,10 @@ pacotes <- c(
   
   # ===== Utilitarios =====
   "glue",         # Interpolacao de strings (scripts/utils.R)
+  "jsonlite",     # JSON e logging leve (run_pipeline.R)
+
+  # ===== Orquestracao =====
+  "targets",      # Pipeline reprodutivel (_targets.R)
   
   # ===== Testes =====
   "testthat"      # Framework de testes (opcional, mas recomendado)

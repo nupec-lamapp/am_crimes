@@ -11,18 +11,23 @@ mod_dashboard_ui <- function(id) {
       column(
         width = 3,
         wellPanel(
-          h5("Filtros"),
+          h5("Filtros (visão BI)"),
+          p("Comece pelo periodo e portal. Use o toggle de crimes contra a vida para focar em assassinatos. Tipo e gravidade ajudam a refinar quando necessário."),
           dateRangeInput(
             ns("filtro_data"),
             "Periodo:",
-            start = Sys.Date() - 30,
-            end   = Sys.Date(),
+            start = as.Date("2025-01-01"),
+            end   = as.Date("2025-12-31"),
             format = "dd/mm/yyyy",
             language = "pt-BR"
           ),
+          div(
+            class = "d-flex gap-1 mb-2",
+            actionButton(ns("btn_range_ano"), "Ano 2025", class = "btn btn-outline-secondary btn-sm"),
+            actionButton(ns("btn_range_30d"), "Últimos 30 dias", class = "btn btn-outline-secondary btn-sm")
+          ),
           selectInput(ns("filtro_portal"), "Portal:", choices = "Todos"),
-          div(class = "text-muted small", textOutput(ns("info_portal_periodo"))),
-          selectInput(ns("fonte_tipo"), "Fonte de tipo:", choices = c("Heuristica" = "heur", "Modelo NLP" = "ml")),
+          checkboxInput(ns("filtro_vida"), "Apenas crimes contra a vida (CLV/letal)", value = FALSE),
           selectInput(ns("filtro_tipo"), "Tipo de crime:", choices = "Todos"),
           selectInput(ns("filtro_gravidade"), "Gravidade:", choices = c("Todas", "baixa", "media", "alta", "muito alta", "extrema")),
           div(
@@ -32,8 +37,8 @@ mod_dashboard_ui <- function(id) {
           ),
           tags$hr(),
           h6("Cobertura por portal"),
+          div(class = "text-muted small", textOutput(ns("info_portal_periodo"))),
           tableOutput(ns("tab_resumo_portal"))
-
         )
       ),
       column(
@@ -61,10 +66,14 @@ mod_dashboard_ui <- function(id) {
             width = 4,
             div(
               class = "kpi-box",
-              div(class = "kpi-title", "Principais tipos de crime"),
+              div(class = "kpi-title", "Tipos frequentes"),
               div(class = "kpi-sub", textOutput(ns("kpi_top_tipos")))
             )
           )
+        ),
+        tags$div(
+          class = "text-muted small mb-3",
+          "Serie Temporal: identifica aceleracoes/quedas recentes. Por Tipo: mostra os 15 principais tipos para priorizar respostas. Tabela: detalhe linha a linha para auditoria ou exportacao."
         ),
         tabsetPanel(
           id = ns("tabs_dyn"),
@@ -94,11 +103,14 @@ mod_dashboard_server <- function(id, dados_enr) {
       df <- dados_enr()
       if (is.null(df) || nrow(df) == 0) return()
 
+      start_default <- as.Date("2025-01-01")
+      end_default   <- as.Date("2025-12-31")
+
       updateDateRangeInput(
         session,
         "filtro_data",
-        start = min(df$data_pub, na.rm = TRUE),
-        end   = max(df$data_pub, na.rm = TRUE)
+        start = start_default,
+        end   = end_default
       )
 
       updateSelectInput(
@@ -167,25 +179,45 @@ mod_dashboard_server <- function(id, dados_enr) {
         df <- df %>% filter(portal == input$filtro_portal)
       }
 
+      if (isTRUE(input$filtro_vida) && "categoria" %in% names(df)) {
+        df <- df %>%
+          filter(categoria == "Crime Letal Violento")
+      }
+
       if (!is.null(input$filtro_gravidade) && input$filtro_gravidade != "Todas") {
         df <- df %>% filter(gravidade == input$filtro_gravidade)
       }
 
       if (!is.null(input$filtro_tipo) && input$filtro_tipo != "Todos") {
-        if (!is.null(input$fonte_tipo) && input$fonte_tipo == "ml" && "tipo_ml" %in% names(df)) {
-          df <- df %>% filter(tipo_ml == input$filtro_tipo)
-        } else {
-          df <- df %>% filter(tipo_principal == input$filtro_tipo)
-        }
+        df <- df %>% filter(tipo_principal == input$filtro_tipo)
       }
 
       df
     }, ignoreNULL = FALSE)
 
-    observeEvent(input$btn_refresh, {
-      dados_enr(carregar_principal())
-      showNotification("Dados recarregados do disco.", type = "message")
-    })
+  observeEvent(input$btn_refresh, {
+    dados_enr(carregar_principal())
+    showNotification("Dados recarregados do disco.", type = "message")
+  })
+
+  observeEvent(input$btn_range_ano, {
+    updateDateRangeInput(
+      session,
+      "filtro_data",
+      start = as.Date("2025-01-01"),
+      end = as.Date("2025-12-31")
+    )
+  })
+
+  observeEvent(input$btn_range_30d, {
+    hoje <- Sys.Date()
+    updateDateRangeInput(
+      session,
+      "filtro_data",
+      start = hoje - 30,
+      end = hoje
+    )
+  })
 
     output$kpi_total <- renderText({
       df <- dados_filt()
@@ -222,11 +254,7 @@ mod_dashboard_server <- function(id, dados_enr) {
     output$kpi_top_tipos <- renderText({
       df <- dados_filt()
       if (is.null(df) || nrow(df) == 0) return("Sem tipos predominantes")
-      col_tipo <- if (!is.null(input$fonte_tipo) && input$fonte_tipo == "ml" && "tipo_ml" %in% names(df)) {
-        "tipo_ml"
-      } else {
-        "tipo_principal"
-      }
+      col_tipo <- "tipo_principal"
       df %>%
         count(.data[[col_tipo]], sort = TRUE) %>%
         head(3) %>%
@@ -259,11 +287,7 @@ mod_dashboard_server <- function(id, dados_enr) {
       df <- dados_filt()
       validate(need(!is.null(df) && nrow(df) > 0, "Sem dados no recorte selecionado."))
 
-      col_tipo <- if (!is.null(input$fonte_tipo) && input$fonte_tipo == "ml" && "tipo_ml" %in% names(df)) {
-        "tipo_ml"
-      } else {
-        "tipo_principal"
-      }
+      col_tipo <- "tipo_principal"
 
       top <- df %>%
         count(.data[[col_tipo]], sort = TRUE) %>%

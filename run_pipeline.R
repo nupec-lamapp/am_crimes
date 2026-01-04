@@ -18,6 +18,21 @@ log_pipeline <- function(level, msg) {
   tryCatch(cat(linha, file = log_file, append = TRUE, sep = "\n"), error = function(e) invisible(NULL))
 }
 
+get_env_value <- function(nome) {
+  val <- Sys.getenv(nome, unset = "")
+  if (identical(val, "")) return(NA_character_)
+  val
+}
+
+write_run_metadata <- function(meta, path) {
+  if (requireNamespace("jsonlite", quietly = TRUE)) {
+    jsonlite::write_json(meta, path, auto_unbox = TRUE, pretty = TRUE, na = "null")
+  } else {
+    linhas <- c("# pipeline metadata", capture.output(str(meta)))
+    writeLines(linhas, con = path)
+  }
+}
+
 run_step <- function(nome, fun) {
   log_pipeline("INFO", sprintf("Iniciando etapa: %s", nome))
   res <- fun()
@@ -40,6 +55,9 @@ run_pipeline_cli <- function(args = commandArgs(trailingOnly = TRUE)) {
   if (is.na(data_inicio) || is.na(data_fim)) stop("Datas inválidas fornecidas ao pipeline.")
   if (data_inicio > data_fim) stop("Data inicial não pode ser maior que a data final.")
 
+  run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  log_pipeline("INFO", sprintf("Run ID: %s", run_id))
+
   log_pipeline("INFO", sprintf("Executando pipeline de %s a %s",
                                format(data_inicio, "%d/%m/%Y"),
                                format(data_fim, "%d/%m/%Y")))
@@ -47,6 +65,31 @@ run_pipeline_cli <- function(args = commandArgs(trailingOnly = TRUE)) {
   source_if_exists("scripts/01_scraping.R")
   source_if_exists("scripts/02_parse.R")
   source_if_exists("scripts/03_cleaning.R")
+
+  meta <- list(
+    run_id = run_id,
+    started_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    args = args,
+    data_inicio = as.character(data_inicio),
+    data_fim = as.character(data_fim),
+    workdir = getwd(),
+    env = list(
+      CRIMES_AM_MAX_PAGINAS = get_env_value("CRIMES_AM_MAX_PAGINAS"),
+      CRIMES_AM_INCLUIR_SEM_DATA = get_env_value("CRIMES_AM_INCLUIR_SEM_DATA"),
+      CRIMES_AM_DEDUP_POR = get_env_value("CRIMES_AM_DEDUP_POR")
+    )
+  )
+  if (exists("listar_coletores")) {
+    meta$coletores <- listar_coletores()
+  }
+
+  meta_path <- file.path(log_dir, paste0("pipeline_run_", run_id, ".json"))
+  tryCatch({
+    write_run_metadata(meta, meta_path)
+    log_pipeline("INFO", sprintf("Metadata de execucao salva em: %s", meta_path))
+  }, error = function(e) {
+    log_pipeline("WARN", sprintf("Falha ao salvar metadata: %s", e$message))
+  })
 
   if (file.exists("scripts/04_analysis.R")) {
     analise_path <- "scripts/04_analysis.R"

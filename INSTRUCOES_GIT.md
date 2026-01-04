@@ -21,7 +21,7 @@ git config user.email "seu.email@exemplo.com"
 git remote add origin https://github.com/USUARIO/crimes_am.git
 ```
 
-## Versionamento da Versão 0.0.7
+## Versionamento da Versão 0.0.9
 
 ### Opção 1: Usar script de versionamento
 
@@ -59,24 +59,24 @@ git add INSTRUCOES_GIT.md
 #### 3. Criar commit
 
 ```bash
-git commit -m "v0.0.7: Lacunas mensais no painel de coleta e ajustes de deploy
+git commit -m "v0.0.9: Robustez do scraping, artigo em Rmd e melhorias no painel
 
-- Reorganiza a aba "Lacunas por portal" mostrando meses desde jan/2025 e os dias faltantes
-- Inclui arquivos essenciais no bundle e atenções de deploy
-- Atualiza metadados e documentação para 0.0.7"
+- Scraper com robots.txt (quando disponível), retry/backoff com Retry-After e cache por URL
+- App renderiza ArtigoWebSrapingSegurancapublica.Rmd (fallback quando pandoc não existe)
+- Pipeline registra metadados por run e parametriza deduplicação por CRIMES_AM_DEDUP_POR"
 ```
 
 #### 4. Criar tag
 
 ```bash
-git tag -a v0.0.7 -m "Versão 0.0.7 - lacunas mensais e ajustes de deploy"
+git tag -a v0.0.9 -m "Versão 0.0.9 - robustez do scraping e padronização do artigo"
 ```
 
 #### 5. Enviar para o GitHub
 
 ```bash
 git push origin develop
-git push origin v0.0.7
+git push origin v0.0.9
 git push origin --tags
 ```
 
@@ -84,15 +84,15 @@ git push origin --tags
 
 ```bash
 git tag
-git show v0.0.7
+git show v0.0.9
 ```
 
 ## Criar release no GitHub
 
 1. Acesse o repositório e vá em **Releases > Create a new release**
-2. Escolha a tag `v0.0.7`
-3. Use o título `v0.0.7 - lacunas mensais e ajustes de deploy`
-4. Copie o conteúdo da seção `[0.0.7]` do `CHANGELOG.md`
+2. Escolha a tag `v0.0.9`
+3. Use o título `v0.0.9 - robustez do scraping e padronização do artigo`
+4. Copie o conteúdo da seção `[0.0.9]` do `CHANGELOG.md`
 5. Clique em **Publish release**
 
 ## Estrutura de commits

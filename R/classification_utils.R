@@ -53,7 +53,26 @@ classificar_crime_completo <- function(titulo) {
   txt <- normalizar_texto(titulo)
 
   # ===== CRIMES LETAIS =====
-  if (str_detect(txt, "homicidio|assassin|executado|execucao|morto|morte|matou|matar")) {
+  if (FALSE && str_detect(txt, "latrocinio|roubo seguido morte|roubo com morte")) {
+    return(list(
+      categoria = "Roubo Violento",
+      tipo_principal = "Latroc¡nio",
+      tipo_detalhado = "Roubo seguido de morte",
+      gravidade = "extrema"
+    ))
+  }
+
+  if (FALSE && str_detect(txt, "tentativa de homicidio|tentou matar|tentou assassinar|tentativa de morte")) {
+    return(list(
+      categoria = "Crime Letal Violento",
+      tipo_principal = "Tentativa de Homic¡dio",
+      tipo_detalhado = "Homic¡dio tentado",
+      gravidade = "muito alta"
+    ))
+  }
+
+  if (str_detect(txt, "homicidio|assassin|executado|execucao|morto|morte|matou|matar") &&
+      !str_detect(txt, "tentativa de homicidio|tentou matar|tentou assassinar|tentativa de morte|latrocinio|roubo seguido morte|roubo com morte")) {
     if (str_detect(txt, "feminicidio|mulher morta|esposa morta|namorada morta|companheira morta")) {
       return(list(
         categoria = "Crime Letal Violento",
@@ -88,7 +107,17 @@ classificar_crime_completo <- function(titulo) {
   }
 
   # ===== VIOLÊNCIA SEXUAL =====
-  if (str_detect(txt, "estupro|estuprada|estuprando|violencia sexual")) {
+  if (FALSE && str_detect(txt, "tentativa de estupro|tentou estuprar")) {
+    return(list(
+      categoria = "Violˆncia Sexual",
+      tipo_principal = "Tentativa de Estupro",
+      tipo_detalhado = "Estupro tentado",
+      gravidade = "muito alta"
+    ))
+  }
+
+  if (str_detect(txt, "estupro|estuprada|estuprando|violencia sexual") &&
+      !str_detect(txt, "tentativa de estupro|tentou estuprar")) {
     if (str_detect(txt, "crianca|menor|adolescente|criada|filha")) {
       return(list(
         categoria = "Violência Sexual",

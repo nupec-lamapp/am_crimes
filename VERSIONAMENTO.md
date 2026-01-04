@@ -2,7 +2,7 @@
 
 Este documento contém instruções atualizadas para registrar versões no GitHub.
 
-## Versão Atual: 0.0.7
+## Versão Atual: 0.0.9
 
 ## Comandos para Versionamento
 
@@ -27,28 +27,28 @@ git add INSTRUCOES_GIT.md
 git add .
 ```
 
-### 3. Criar Commit da Versão 0.0.7
+### 3. Criar Commit da Versão 0.0.9
 
 ```bash
-git commit -m "v0.0.7: Lacunas mensais no painel de coleta e ajustes de deploy
+git commit -m "v0.0.9: Robustez do scraping, artigo em Rmd e melhorias no painel
 
-- reorganiza a aba de lacunas para mostrar meses desde jan/2025 e os dias faltantes
-- inclui arquivos essenciais no bundle e atualiza metas de deploy
-- atualiza metadados e documentação para 0.0.7"
+- scraper com robots.txt (quando disponível), retry/backoff com Retry-After e cache por URL
+- app renderiza ArtigoWebSrapingSegurancapublica.Rmd (fallback quando pandoc não existe)
+- pipeline registra metadados por run e parametriza deduplicação por CRIMES_AM_DEDUP_POR"
 ```
 
 ### 4. Criar Tag da Versão
 
 ```bash
 # Tag anotada
-git tag -a v0.0.7 -m "Versão 0.0.7 - lacunas mensais e ajustes de deploy"
+git tag -a v0.0.9 -m "Versão 0.0.9 - robustez do scraping e padronização do artigo"
 ```
 
 ### 5. Enviar para o GitHub
 
 ```bash
 git push origin develop
-git push origin v0.0.7
+git push origin v0.0.9
 git push origin --tags
 ```
 
@@ -62,6 +62,8 @@ git push origin --tags
 
 ## Histórico de Versões
 
+- **v0.0.9 (2026-01-03)**: robustez do scraping (robots.txt, retry/backoff e cache), artigo em `.Rmd` no app e ajustes de reprodutibilidade do pipeline.
+- **v0.0.8 (2025-12-29)**: melhorias na aba "Controle de Coleta" (filtros, cobertura e feedback de execução) e ajustes no deploy.
 - **v0.0.7 (2025-12-28)**: reorganização da aba "Lacunas por portal" para exibir cada mês desde jan/2025 com os dias faltantes, atualização das instruções e metadados para a nova release.
 - **v0.0.6 (2025-12-27)**: Template científico, créditos e documentação de versionamento atualizados.
 - **v0.0.5 (2025-12-26)**: Integração com todos os portais monitorados e botão de atualização do dashboard.
